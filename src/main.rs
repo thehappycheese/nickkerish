@@ -1,9 +1,13 @@
-use clap::Parser;
-use clio::Input;
-
 mod connection;
 mod install;
+mod wire;
+
+use wire::{JupyterMessage};
+
+use clap::Parser;
+use clio::Input;
 use zeromq::{SocketSend, SocketRecv};
+
 
 // use clap to create a command line argument --connection-file to receive the path
 #[derive(Debug, Parser)]
@@ -54,13 +58,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Successfully Created Sockets");
 
         let shell_result = shell_socket.recv().await?;
-        println!("Received message from shell: {:?}", shell_result);
+        let message:JupyterMessage = shell_result.try_into()?;
+        shell_socket.send()
+        println!("Shell: {:?}", message);
 
-        // Block and wait for a message
+        println!("Starting Heartbeat");
         tokio::spawn(async move {
             handel_heartbeat(heartbeat_socket).await
         });
-        
+        println!("DONE");
     }
     Ok(())
 }

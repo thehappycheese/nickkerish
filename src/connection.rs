@@ -1,8 +1,7 @@
 use std::{net::IpAddr, fmt::Display};
 use serde::Deserialize;
-use hmac::Hmac;
+use hmac::{Hmac, Mac};
 use sha2::Sha256;
-pub type HmacSha256 = Hmac<Sha256>;
 use anyhow::Result;
 use zeromq::Socket;
 
@@ -48,6 +47,13 @@ pub struct Connection {
     #[serde(rename="hb_port")]
     pub heartbeat_port: u16,
 }
+// impl Connection {
+//     pub fn get_signature(&self, msg: &str) -> String {
+//         let mut mac = <Hmac<Sha256>>::new_from_slice(self.key.as_bytes()).unwrap();
+//         mac.update(msg.as_bytes());
+//         hex::encode(mac.finalize().into_bytes())
+//     }
+// }
 
 macro_rules! create_socket {
     ($fname:ident, $socket_type:ty, $port:ident) => {
@@ -59,47 +65,9 @@ macro_rules! create_socket {
     };
 }
 impl Connection {
-    create_socket!(create_socket_shell    , zeromq::RouterSocket, shell_port  );
-    create_socket!(create_socket_iopub    , zeromq::PubSocket   , iopub_port  );
-    create_socket!(create_socket_stdin    , zeromq::RouterSocket, stdin_port  );
-    create_socket!(create_socket_control  , zeromq::RouterSocket, control_port);
-    create_socket!(create_socket_heartbeat, zeromq::RepSocket   , heartbeat_port     );
+    create_socket!(create_socket_shell    , zeromq::RouterSocket, shell_port    );
+    create_socket!(create_socket_iopub    , zeromq::PubSocket   , iopub_port    );
+    create_socket!(create_socket_stdin    , zeromq::RouterSocket, stdin_port    );
+    create_socket!(create_socket_control  , zeromq::RouterSocket, control_port  );
+    create_socket!(create_socket_heartbeat, zeromq::RepSocket   , heartbeat_port);
 }
-
-
-// impl Connection {
-//     macro_rules! mk{
-//         ($fname:ident, restype:type)=>{
-//             pub async fn create_shell_socket(&self) -> Result<zeromq::RouterSocket> {
-//                 let mut socket = zeromq::RouterSocket::new();
-//                 socket.bind(endpoint!(self.shell_port).as_str()).await?;
-//                 Ok(socket)
-//             }
-//         }
-//     }
-//     pub async fn create_shell_socket(&self) -> Result<zeromq::RouterSocket> {
-//         let mut socket = zeromq::RouterSocket::new();
-//         socket.bind(endpoint!(self.shell_port).as_str()).await?;
-//         Ok(socket)
-//     }
-//     pub async fn create_iopub_socket(&self) -> Result<zeromq::PubSocket> {
-//         let mut socket = zeromq::PubSocket::new();
-//         socket.bind(endpoint!(self.iopub_port).as_str()).await?;
-//         Ok(socket)
-//     }
-//     pub async fn create_stdin_socket(&self) -> Result<zeromq::RouterSocket> {
-//         let mut socket = zeromq::RouterSocket::new();
-//         socket.bind(endpoint!(self.stdin_port).as_str()).await?;
-//         Ok(socket)
-//     }
-//     pub async fn create_control_socket(&self) -> Result<zeromq::RouterSocket> {
-//         let mut socket = zeromq::RouterSocket::new();
-//         socket.bind(endpoint!(self.control_port).as_str()).await?;
-//         Ok(socket)
-//     }
-//     pub async fn create_heartbeat_socket(&self) -> Result<zeromq::RepSocket> {
-//         let mut socket = zeromq::RepSocket::new();
-//         socket.bind(endpoint!(self.hb_port).as_str()).await?;
-//         Ok(socket)
-//     }
-// }
