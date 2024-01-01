@@ -3,8 +3,6 @@ use clio::Input;
 
 mod connection;
 mod install;
-//mod logging;
-//use logging::{log, setup_logging};
 use zeromq::{SocketSend, SocketRecv};
 
 // use clap to create a command line argument --connection-file to receive the path
