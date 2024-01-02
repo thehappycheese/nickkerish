@@ -27,11 +27,11 @@ pub fn kernel_spec() -> Result<()> {
                 "--connection-file".to_owned(),
                 "{connection_file}".to_owned(),
             ],
-        display_name: "Nickerish".to_owned(),
-        language: "nickerish".to_owned(),
+        display_name: "Nickkerish".to_owned(),
+        language: "nickkerish".to_owned(),
     };
 
-    let kernel_folder = PathBuf::from("Nickerish");
+    let kernel_folder = PathBuf::from("Nickkerish");
     fs::create_dir_all(&kernel_folder)
         .context("Failed to create kernel folder")?;
 

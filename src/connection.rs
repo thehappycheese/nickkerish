@@ -1,7 +1,5 @@
 use std::{net::IpAddr, fmt::Display};
 use serde::Deserialize;
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
 use anyhow::Result;
 use zeromq::Socket;
 
@@ -9,15 +7,15 @@ use zeromq::Socket;
 pub enum Transport {
     #[serde(alias="tcp",alias="TCP", rename(serialize = "tcp"))]
     Tcp,
-    #[serde(alias="icp",alias="ICP", rename(serialize = "icp"))]
-    Icp // unix only
+    #[serde(alias="ipc",alias="IPC", rename(serialize = "ipc"))]
+    Ipc // unix only
 }
 
 impl Display for Transport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Transport::Tcp => write!(f, "tcp"),
-            Transport::Icp => write!(f, "icp"),
+            Transport::Ipc => write!(f, "icp"),
         }
     }
 }
@@ -29,12 +27,12 @@ pub enum SignatureScheme{
 
 /// Represents the JSON connection file received from vscode or jupyter lab
 #[derive(Debug, Deserialize)]
-pub struct Connection {
+pub struct ConnectionInformation {
     pub ip: IpAddr,
     pub signature_scheme: SignatureScheme,
     /// typically a UUID when signature scheme is specified
     pub key: String,
-    /// Either TCP or ICP
+    /// Either TCP or IPC
     pub transport: Transport,
     /// kernel name (Seems to match the name provided in `kernel.json` for the `language` property)
     pub kernel_name: String,
@@ -64,7 +62,7 @@ macro_rules! create_socket {
         }
     };
 }
-impl Connection {
+impl ConnectionInformation {
     create_socket!(create_socket_shell    , zeromq::RouterSocket, shell_port    );
     create_socket!(create_socket_iopub    , zeromq::PubSocket   , iopub_port    );
     create_socket!(create_socket_stdin    , zeromq::RouterSocket, stdin_port    );

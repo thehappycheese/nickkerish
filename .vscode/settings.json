@@ -1,8 +1,13 @@
 {
     "cSpell.words": [
+        "appender",
         "chrono",
+        "Hmac",
         "iopub",
+        "ipython",
         "kernelspec",
-        "Nickerish"
+        "nbconvert",
+        "Nickkerish",
+        "pygments"
     ]
 }
