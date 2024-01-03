@@ -4,10 +4,12 @@ use crate::{
         Message,
         JupyterMessageType,
         JupyterMessageContent,
-        JupyterKernelInfoReply
+        JupyterKernelInfoReply,
+        PublishKernelStatus, KernelExecutionState, Header, KERNEL_MESSAGING_VERSION
     }
 };
 use anyhow::{Result, Context};
+use bytes::Bytes;
 use zeromq::{SocketRecv, SocketSend};
 use tracing::debug;
 pub async fn serve(connection_information: ConnectionInformation) -> Result<()> {
@@ -20,11 +22,11 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
 
     let mut shell_socket: zeromq::RouterSocket = connection_information.create_socket_shell    ().await?;
     // 
-    let iopub_socket    : zeromq::PubSocket    = connection_information.create_socket_iopub    ().await?;
+    let mut iopub_socket    : zeromq::PubSocket    = connection_information.create_socket_iopub    ().await?;
     // For kernel to request stdin from frontend. Wont be used
     let _stdin_socket    : zeromq::RouterSocket = connection_information.create_socket_stdin    ().await?; 
     // for shutdown restart and debug requests from client
-    let control_socket  : zeromq::RouterSocket = connection_information.create_socket_control  ().await?;
+    let _control_socket  : zeromq::RouterSocket = connection_information.create_socket_control  ().await?;
     let heartbeat_socket: zeromq::RepSocket    = connection_information.create_socket_heartbeat().await?;
 
     println!("Successfully Created Sockets, waiting for message on Shell Socket");
@@ -35,6 +37,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
     debug!("Shell: {shell_result:?}");
     let message_received: Message = shell_result.try_into().context("Deser JupyterMessage")?;
 
+    let kernel_session_id = "kernel's session id - should be guid"; // TODO: generate guid
     
     println!("Shell: {message_received:?}");
     debug!("Shell: {message_received:?}");
@@ -47,18 +50,55 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
             value.date.clone(), // TODO: get the current date
         )),
         parent_header: message_received.header.clone(),
-        content: JupyterMessageContent::KernelInfoReply(
-            JupyterKernelInfoReply::default().into()
+        content: JupyterMessageContent::from(
+            JupyterKernelInfoReply::default()
         ).into(),
         ..Default::default()
     };
     println!("Sending KernelInfoReply {response:?}");
     debug!("Sending KernelInfoReply {response:?}");
-    let response = response.to_zmq_message(connection_information.key)?;
+    let response = response.to_zmq_message(connection_information.key.clone())?;
     println!("Sending KernelInfoReply {response:?}");
     debug!("Sending KernelInfoReply {response:?}");
     shell_socket.send(response).await?;
     
+
+    
+    let kernel_status_message = Message {
+        identities: vec![Bytes::from("kernel_status")], // topic
+        content: JupyterMessageContent::from(PublishKernelStatus{
+            execution_state: KernelExecutionState::Starting
+        }).into(),
+        header: Header{
+            message_id:"fudge".into(),
+            message_type:Some(JupyterMessageType::Status),
+            date:"2023".into(),
+            session: kernel_session_id.into(),
+            username:"Nickkerish Kernel".into(),
+            version:KERNEL_MESSAGING_VERSION.into()
+        }.into(),
+        ..Default::default()
+    };
+    debug!("Sending KernelStatus Starting {kernel_status_message:?}");
+    iopub_socket.send(kernel_status_message.to_zmq_message(connection_information.key.clone())?).await?;
+    let kernel_status_message = Message {
+        identities: vec![Bytes::from("kernel_status")], // topic
+        content: JupyterMessageContent::from(PublishKernelStatus{
+            execution_state: KernelExecutionState::Idle
+        }).into(),
+        header: Header{
+            message_id:"fudge".into(),
+            message_type:Some(JupyterMessageType::Status),
+            date:"2023".into(),
+            session: kernel_session_id.into(),
+            username:"Nickkerish Kernel".into(),
+            version:KERNEL_MESSAGING_VERSION.into()
+        }.into(),
+        ..Default::default()
+    };
+    debug!("Sending KernelStatus Idle {kernel_status_message:?}");
+    iopub_socket.send(kernel_status_message.to_zmq_message(connection_information.key.clone())?).await?;
+
     println!("Starting Heartbeat");
     let heartbeat_join_handel = tokio::spawn(async move {
         match handel_heartbeat(heartbeat_socket).await {

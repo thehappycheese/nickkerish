@@ -9,6 +9,5 @@ pub enum JupyterMessageType {
     KernelInfoRequest,
     KernelInfoReply,
     // IO Pub
-    StatusRequest,
-    StatusReply,
+    Status
 }

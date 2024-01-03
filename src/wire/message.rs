@@ -22,7 +22,12 @@ pub struct Metadata{}
 /// A deserialized ZMQ Jupyter Message
 #[derive(Debug, Default)]
 pub struct Message {
+    /// When this message is to be a response to a received message, then just copy the identities
+    /// from the received message. For iopub messages this should probably just be a single value
+    /// and by convention is the message type.
+    /// See <https://jupyter-client.readthedocs.io/en/latest/messaging.html#the-wire-protocol>
     pub identities: Vec<Bytes>,
+    /// see docs for [`Message::compute_signature()`]
     pub signature: Bytes,
     pub header: EmptyObjectOr<Header>,
     pub parent_header: EmptyObjectOr<Header>,

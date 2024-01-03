@@ -5,7 +5,7 @@ pub struct Header{
     #[serde(rename="msg_id")]
     pub message_id:String,
     #[serde(rename="msg_type")]
-    pub message_type:Option<JupyterMessageType>,
+    pub message_type:Option<JupyterMessageType>, // TODO: why is this optional?
     pub username:String,
     pub session:String,
     pub date:String,
