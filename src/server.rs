@@ -1,7 +1,13 @@
-use crate::{connection::ConnectionInformation, wire::{JupyterMessage, JupyterHeader, JupyterMessageType, JupyterMessageContent, JupyterKernelInfoReply}};
+use crate::{
+    connection::ConnectionInformation,
+    wire::{
+        Message,
+        JupyterMessageType,
+        JupyterMessageContent,
+        JupyterKernelInfoReply
+    }
+};
 use anyhow::{Result, Context};
-use serde::de;
-use tracing_subscriber::field::debug;
 use zeromq::{SocketRecv, SocketSend};
 use tracing::debug;
 pub async fn serve(connection_information: ConnectionInformation) -> Result<()> {
@@ -27,25 +33,24 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
     let shell_result = shell_socket.recv().await?;
     println!("Shell: {shell_result:?}");
     debug!("Shell: {shell_result:?}");
-    let message: JupyterMessage = shell_result.try_into().context("Deser JupyterMessage")?;
+    let message_received: Message = shell_result.try_into().context("Deser JupyterMessage")?;
 
     
-    println!("Shell: {message:?}");
-    debug!("Shell: {message:?}");
-    let response = JupyterMessage {
-        identities: message.identities.clone(),
-        signature: "WRONG SIGNATURE".into(), // TODO: Create builder so that correct signature can be appended,
-        header: message.header.with_id_type_date(
-            message.header.message_id.clone(),
+    println!("Shell: {message_received:?}");
+    debug!("Shell: {message_received:?}");
+    let response = Message {
+        identities: message_received.identities.clone(),
+        signature: "".into(), // TODO: When Message is serialized, this is not used but recomputed
+        header: message_received.header.clone().map(|value| value.with_id_type_date(
+            value.message_id.clone(),
             JupyterMessageType::KernelInfoReply,
-            message.header.date.clone(), // TODO: get the current date
-        ),
-        parent_header: message.header.clone().into(),
+            value.date.clone(), // TODO: get the current date
+        )),
+        parent_header: message_received.header.clone(),
         content: JupyterMessageContent::KernelInfoReply(
-            JupyterKernelInfoReply::default()
-        ),
-        metadata: "{}".into(),
-        extra_buffers: vec![],
+            JupyterKernelInfoReply::default().into()
+        ).into(),
+        ..Default::default()
     };
     println!("Sending KernelInfoReply {response:?}");
     debug!("Sending KernelInfoReply {response:?}");

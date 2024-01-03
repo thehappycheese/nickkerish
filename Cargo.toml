@@ -1,7 +1,8 @@
 [package]
-name = "rusty-jupyter-kernel"
+name = "nikkerish"
 version = "0.1.0"
 edition = "2021"
+description = "A Jupyter Kernel implemented directly in Rust for a non existent dummy language named Nickkerish"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
