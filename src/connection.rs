@@ -2,20 +2,20 @@ use std::{net::IpAddr, fmt::Display};
 use serde::Deserialize;
 use anyhow::Result;
 use zeromq::Socket;
-
+use tracing::debug;
 #[derive(Debug, Deserialize)]
 pub enum Transport {
     #[serde(alias="tcp",alias="TCP", rename(serialize = "tcp"))]
     Tcp,
-    #[serde(alias="ipc",alias="IPC", rename(serialize = "ipc"))]
-    Ipc // unix only
+    // #[serde(alias="ipc",alias="IPC", rename(serialize = "ipc"))]
+    // Ipc // unix only
 }
 
 impl Display for Transport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Transport::Tcp => write!(f, "tcp"),
-            Transport::Ipc => write!(f, "icp"),
+            // Transport::Ipc => write!(f, "icp"),
         }
     }
 }
@@ -45,23 +45,25 @@ pub struct ConnectionInformation {
     #[serde(rename="hb_port")]
     pub heartbeat_port: u16,
 }
-// impl Connection {
-//     pub fn get_signature(&self, msg: &str) -> String {
-//         let mut mac = <Hmac<Sha256>>::new_from_slice(self.key.as_bytes()).unwrap();
-//         mac.update(msg.as_bytes());
-//         hex::encode(mac.finalize().into_bytes())
-//     }
-// }
 
 macro_rules! create_socket {
     ($fname:ident, $socket_type:ty, $port:ident) => {
         pub async fn $fname(&self) -> Result<$socket_type> {
             let mut socket = <$socket_type>::new();
+            println_debug!(
+                "binding {} for {} {}://{}:{}",
+                stringify!($socket_type),
+                stringify!($fname),
+                self.transport,
+                self.ip,
+                self.$port,
+            );
             socket.bind(format!("{}://{}:{}", self.transport, self.ip, self.$port).as_str()).await?;
             Ok(socket)
         }
     };
 }
+
 impl ConnectionInformation {
     create_socket!(create_socket_shell    , zeromq::RouterSocket, shell_port    );
     create_socket!(create_socket_iopub    , zeromq::PubSocket   , iopub_port    );

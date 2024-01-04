@@ -1,7 +1,7 @@
 use super::{
     HmacSha256,
     Header,
-    JupyterMessageContent,
+    MessageContent,
     DELIMITER
 };
 use crate::util::EmptyObjectOr;
@@ -32,7 +32,7 @@ pub struct Message {
     pub header: EmptyObjectOr<Header>,
     pub parent_header: EmptyObjectOr<Header>,
     pub metadata: Metadata,
-    pub content: EmptyObjectOr<JupyterMessageContent>,
+    pub content: EmptyObjectOr<MessageContent>,
     pub extra_buffers: Vec<Bytes>,
 }
 
@@ -45,17 +45,17 @@ impl TryFrom<ZmqMessage> for Message {
         Ok(Message {
             identities    : frames[0..delimiter_index].into(),
             signature     : frames[delimiter_index + 1].clone(),
-            header        : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 2]).context("Failed to decode header in TryFrom<ZmqMessage> for Message")?,
-            parent_header : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 3]).context("Failed to decode parent_header in TryFrom<ZmqMessage> for Message")?,
-            metadata      : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 4]).context("Failed to decode metadata in TryFrom<ZmqMessage> for Message")?,
-            content       : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 5]).context("Failed to decode content in TryFrom<ZmqMessage> for Message")?,
+            header        : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 2]).context("Failed to decode .header in TryFrom<ZmqMessage> for Message")?,
+            parent_header : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 3]).context("Failed to decode .parent_header in TryFrom<ZmqMessage> for Message")?,
+            metadata      : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 4]).context("Failed to decode .metadata in TryFrom<ZmqMessage> for Message")?,
+            content       : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 5]).context(format!("Failed to decode .content in TryFrom<ZmqMessage> for Message;\n {:?}", &frames[delimiter_index + 5]))?,
             extra_buffers : frames[delimiter_index + 6..].into(),
         })
     }
 }
 
 impl Message {
-    pub fn to_zmq_message(&self, key: String) -> Result<ZmqMessage> {
+    pub fn to_zmq_message(&self, key: &str) -> Result<ZmqMessage> {
         // compute signature
         let mut frames: Vec<Bytes> = vec![];
         frames.extend(self.identities.clone());
@@ -71,7 +71,7 @@ impl Message {
             .map_err(|e| anyhow::anyhow!(format!("{e}")))
     }
 
-    fn compute_signature(&self, key: String) -> Result<String> {
+    fn compute_signature(&self, key: &str) -> Result<String> {
         let mut signature = HmacSha256::new_from_slice(key.as_bytes())?;
         
         signature.update(self.header.try_to_json_string()?.as_bytes());
@@ -88,24 +88,24 @@ impl Message {
 #[cfg(test)]
 mod tests {
     use zeromq::ZmqMessage;
-    use crate::wire::JupyterKernelInfoReply;
+    use crate::wire::KernelInfoReply;
 
     use super::*;
     #[test]
     fn test_default_message(){
         let result = Message::default();
         println!("{result:?}");
-        let result = result.to_zmq_message("key".to_string()).unwrap();
+        let result = result.to_zmq_message("test_dummy_key").unwrap();
         println!("{result:?}");
     }
     #[test]
     fn default_kernel_info_reply() {
-        let content = JupyterKernelInfoReply::default();
+        let content = KernelInfoReply::default();
         let message = Message {
-            content: JupyterMessageContent::KernelInfoReply(content).into(),
+            content: MessageContent::KernelInfoReply(content).into(),
             ..Default::default()
         };
-        let message: ZmqMessage = message.to_zmq_message("key".to_owned()).unwrap();
+        let message: ZmqMessage = message.to_zmq_message("test_dummy_key").unwrap();
         println!("Default kernel reply message: {:?}", message);
     }
 }

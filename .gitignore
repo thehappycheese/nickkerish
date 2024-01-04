@@ -4,3 +4,4 @@ kernel.json
 
 # We are riding the cutting edge of the zeromq crate, no point locking for now.
 Cargo.lock
+LOGS/

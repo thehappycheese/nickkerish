@@ -1,16 +1,16 @@
 
 use serde::{Serialize, Deserialize};
 
-use super::JupyterReplyStatus;
+use super::{ReplyStatus, KERNEL_MESSAGING_VERSION};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct JupyterKernelInfoLink {
+pub struct InfoLink {
     text: String,
     url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct JupyterKernelInfoLanguageInfo {
+pub struct LanguageInfo {
     /// Name of the programming language that the kernel implements.
     /// Kernel included in IPython returns 'python'.
     name: String,
@@ -20,7 +20,7 @@ pub struct JupyterKernelInfoLanguageInfo {
     /// included in IPython.
     version: String,
 
-    /// mimetype for script files in this language
+    /// mimetype for script files in this language (probably just text/plain ?) 
     mimetype: String,
 
     /// Extension including the dot, e.g. '.py'
@@ -45,7 +45,7 @@ pub struct JupyterKernelInfoLanguageInfo {
     nbconvert_exporter: Option<String>,
 }
 
-impl Default for JupyterKernelInfoLanguageInfo {
+impl Default for LanguageInfo {
     fn default() -> Self {
         Self {
             name: "nickkerish".to_owned(),
@@ -60,10 +60,10 @@ impl Default for JupyterKernelInfoLanguageInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct JupyterKernelInfoReply {
+pub struct KernelInfoReply {
     /// 'ok' if the request succeeded or 'error',
     /// with error information as in all other replies.
-    pub(crate) status: JupyterReplyStatus,
+    pub(crate) status: ReplyStatus,
     /// Version of messaging protocol.
     /// The first integer indicates major version.  It is incremented when
     /// there is any backward incompatible change.
@@ -79,7 +79,7 @@ pub struct JupyterKernelInfoReply {
     pub(crate) implementation_version: String,
 
     /// Information about the language of code for the kernel
-    pub(crate) language_info: JupyterKernelInfoLanguageInfo,
+    pub(crate) language_info: LanguageInfo,
 
     /// A boolean flag which tells if the kernel supports debugging in the notebook.
     /// Default is False
@@ -91,20 +91,20 @@ pub struct JupyterKernelInfoReply {
 
     /// Optional: A list of dictionaries, each with keys 'text' and 'url'.
     /// These will be displayed in the help menu in the notebook UI.
-    pub(crate) help_links: Vec<JupyterKernelInfoLink>,
+    pub(crate) help_links: Vec<InfoLink>,
 }
 
-impl Default for JupyterKernelInfoReply {
+impl Default for KernelInfoReply {
     fn default() -> Self {
         Self {
-            status: JupyterReplyStatus::Ok,
-            protocol_version: "5.4.0".to_owned(),
+            status: ReplyStatus::Ok,
+            protocol_version: KERNEL_MESSAGING_VERSION.into(),
             implementation: "nickkerish_kernel".to_owned(),
             implementation_version: "0.1.0".to_owned(),
             language_info: Default::default(),
             banner: Default::default(),
             debugger: Default::default(),
-            help_links: vec![JupyterKernelInfoLink {
+            help_links: vec![InfoLink {
                 text: "Nickkerish Repo".to_owned(),
                 url: "https://github.com/thehappycheese/nickkerish".to_owned(),
             }],

@@ -6,13 +6,31 @@ use std::{
 use serde::Serialize;
 use anyhow::{Context, Result};
 
+#[derive(Debug, Serialize, Default)]
+#[serde(rename_all="snake_case")]
+enum InterruptMode{
+    #[default]
+    Signal,
+    Message
+}
+
 #[derive(Debug, Serialize)]
 struct KernelSpec{
     argv: Vec<String>,
     display_name: String,
     language: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    interrupt_mode: Option<InterruptMode>
 }
 
+/// Installs the generates `./nickerish/kernel.json` and calls
+/// 
+/// ```bash
+/// jupyter kernelspec install --user ./nickerish
+/// ```
+/// 
+/// TODO: Add better error explaining to the user what to do if the `jupyter kernelspec` command fails
+/// TODO: Add flag to make the `--user` flag optional
 pub fn kernel_spec() -> Result<()> {
     let current_executable_path = std::env::current_exe()
         .context("Failed to get current executable path")?;
@@ -29,6 +47,7 @@ pub fn kernel_spec() -> Result<()> {
             ],
         display_name: "Nickkerish".to_owned(),
         language: "nickkerish".to_owned(),
+        interrupt_mode: None // Default is signal
     };
 
     let kernel_folder = PathBuf::from("Nickkerish");

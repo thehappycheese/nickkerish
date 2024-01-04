@@ -1,7 +1,20 @@
 use serde::{Deserialize, Serialize};
 
-/// Similar to the Option type, but
-/// the None variant is serialized/deserialized by `serde_json` to/from an empty object `{}`
+/// Similar to the `Option` type, but the `None` variant is serialized/deserialized by `serde_json`
+/// to / from an empty object `{}`.
+/// 
+/// Introduces the constraint `#[serde(deny_unknown_fields)]` which means that for the `Object(T)`
+/// type `T` cannot be used for json objects which may contain unknown fields.
+/// 
+/// TODO: This is a problem for compatibility
+/// https://jupyter-client.readthedocs.io/en/latest/messaging.html#compatibility
+/// 
+/// > I tried very hard to make a custom serializer/deserializer for serde that allows serde_json to 
+/// > convert a generic `Option<T>`'s `None` variant to and from `{}` but it turns out not to be
+/// > possible for the generic case. For one thing it seems impossible to check the number of keys
+/// > in a map before serializing it, and even if you could you might end up having to write a
+/// > custom serializer/deserializer for each type `T`.
+/// 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
@@ -47,4 +60,12 @@ impl<T> EmptyObjectOr<T> {
             Self::Object(t) => EmptyObjectOr::<U>::Object(f(t))
         }
     }
+
+    pub fn unwrap(self) -> T {
+        match self {
+            Self::EmptyObject{} => panic!("EmptyObjectOr::unwrap called on EmptyObjectOr::EmptyObject{{}}"),
+            Self::Object(t) => t
+        }
+    }
 }
+

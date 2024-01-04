@@ -14,6 +14,7 @@ Currently it isn't working yet.
   - [1.3. `stdin` Router](#13-stdin-router)
   - [1.4. `control` Router](#14-control-router)
   - [1.5. `heartbeat` Rep](#15-heartbeat-rep)
+- [structure](#structure)
 - [Dev Notes](#dev-notes)
 
 
@@ -42,6 +43,9 @@ Used for shutdown, restart and debug messages.
 ### 1.5. `heartbeat` Rep
 
 Kernel muse echo back immediately when receiving a message on this channel.
+
+## structure
+
 
 ## Dev Notes
 
