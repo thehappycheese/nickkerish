@@ -6,7 +6,7 @@ use super::{
     StatusPublication,
     ExecuteRequest,
     ExecuteReply,
-    ExecuteResultPublication,
+    ExecuteResultPublication, CommOpen,
 };
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +25,8 @@ pub enum MessageContent {
     //       execution requests for now:
     IsCompleteRequest(IsCompleteRequest),
     IsCompleteReply(IsCompleteReply),
+
+    CommOpen(CommOpen),
 }
 
 macro_rules! impl_from_message_content {

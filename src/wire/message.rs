@@ -12,28 +12,69 @@ use anyhow::Context;
 use anyhow::Result;
 use bytes::Bytes;
 use hmac::Mac;
-use serde::Deserialize;
-use serde::Serialize;
 use zeromq::ZmqMessage;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct Metadata{}
+
+fn abbreviate_string(s: &str) -> String {
+    let threshold = 10;
+    let ellipsis = "...";
+
+    if s.len() > threshold {
+        let start = &s[..5]; // First 5 characters
+        let end = &s[s.len()-5..]; // Last 5 characters
+        format!("{}{}{}", start, ellipsis, end)
+    } else {
+        s.to_string()
+    }
+}
+
 
 /// A deserialized ZMQ Jupyter Message
 #[derive(Debug, Default)]
 pub struct Message {
     /// When this message is to be a response to a received message, then just copy the identities
-    /// from the received message. For iopub messages this should probably just be a single value
-    /// and by convention is the message type.
+    /// from the received message. For iopub messages this is just a single value
+    /// and is the "topic" by convention is the message type.
+    /// 
+    /// > In most cases, the IOPub topics are irrelevant and completely ignored, because front-ends
+    /// > just subscribe to all topics. The convention used in the IPython kernel is to use the
+    /// > `msg_type` as the topic, and possibly extra information about the message, e.g.
+    /// > kernel.{u-u-i-d}.execute_result or stream.stdout
+    /// 
     /// See <https://jupyter-client.readthedocs.io/en/latest/messaging.html#the-wire-protocol>
     pub identities: Vec<Bytes>,
-    /// see docs for [`Message::compute_signature()`]
+
+    /// The signature is the HMAC hex digest of the concatenation of:
+    /// - A shared key (typically the key field of a connection file)
+    /// - The serialized header dict
+    /// - The serialized parent header dict
+    /// - The serialized metadata dict
+    /// - The serialized content dict
     pub signature: Bytes,
     pub header: EmptyObjectOr<Header>,
     pub parent_header: EmptyObjectOr<Header>,
-    pub metadata: Metadata,
+    pub metadata: serde_json::Map<String, serde_json::Value>,
     pub content: EmptyObjectOr<MessageContent>,
+    /// After the serialized dicts are zero to many raw data buffers, which can be used by message
+    /// types that support binary data, which can be used in custom messages, such as comms and
+    /// extensions to the protocol.
     pub extra_buffers: Vec<Bytes>,
+}
+
+impl std::fmt::Display for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[Message]{{\n\tidentities: [{:}],\n\tsignature: {:}\n\theader: {:}\n\tparent_header: {:}\n\tmetadata: {:}\n\tcontent: {:}\n\textra_buffers: [{:}]}}",
+            self.identities.len(),
+            abbreviate_string(&format!("{:?}", &self.signature)),
+            serde_json::to_string(&self.header).unwrap(),
+            serde_json::to_string(&self.parent_header).unwrap(),
+            serde_json::to_string(&self.metadata).unwrap(),
+            serde_json::to_string(&self.content).unwrap(),
+            self.extra_buffers.len()
+        )
+    }
 }
 
 impl TryFrom<ZmqMessage> for Message {
@@ -55,8 +96,8 @@ impl TryFrom<ZmqMessage> for Message {
 }
 
 impl Message {
+    /// Could not use `TryInto` trait because key must be provided
     pub fn to_zmq_message(&self, key: &str) -> Result<ZmqMessage> {
-        // compute signature
         let mut frames: Vec<Bytes> = vec![];
         frames.extend(self.identities.clone());
         frames.push(DELIMITER.into());
@@ -66,19 +107,15 @@ impl Message {
         frames.push(serde_json::to_string(&self.metadata)?.into());
         frames.push(serde_json::to_string(&self.content)?.into());
         frames.extend(self.extra_buffers.clone());
-        frames
-            .try_into()
-            .map_err(|e| anyhow::anyhow!(format!("{e}")))
+        ZmqMessage::try_from(frames).map_err(|e| anyhow::anyhow!(e))
     }
 
     fn compute_signature(&self, key: &str) -> Result<String> {
         let mut signature = HmacSha256::new_from_slice(key.as_bytes())?;
-        
         signature.update(self.header.try_to_json_string()?.as_bytes());
         signature.update(self.parent_header.try_to_json_string()?.as_bytes());
         signature.update(serde_json::to_string(&self.metadata)?.as_bytes());
         signature.update(self.content.try_to_json_string()?.as_bytes());
-
         let signature = hex::encode(signature.finalize().into_bytes());
         Ok(signature)
     }
@@ -107,5 +144,14 @@ mod tests {
         };
         let message: ZmqMessage = message.to_zmq_message("test_dummy_key").unwrap();
         println!("Default kernel reply message: {:?}", message);
+    }
+    #[test]
+    fn default_display_message() {
+        let content = KernelInfoReply::default();
+        let message = Message {
+            content: MessageContent::KernelInfoReply(content).into(),
+            ..Default::default()
+        };
+        println!("{message}");
     }
 }

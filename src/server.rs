@@ -5,15 +5,16 @@ use crate::{
     wire::{
         Header, MessageContent, MessageType, ExecutionState, Message,
         KernelInfoReply, StatusPublication, KERNEL_MESSAGING_VERSION, IsCompleteReply, IsCompleteReplyStatus, ExecuteReply, ExecuteResultPublication,
-    },
+    }, util::{iso_8601_Z_now, zmq_message_pretty_print},
 };
 
 use anyhow::{Context, Result};
 use bytes::Bytes;
-use chrono::Utc;
 use tracing::debug;
 use uuid::Uuid;
 use zeromq::{SocketRecv, SocketSend};
+
+
 
 pub async fn serve(connection_information: ConnectionInformation) -> Result<()> {
     println_debug!("Server Connecting...");
@@ -52,9 +53,15 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
 
     loop{
         let shell_result = shell_socket.recv().await?;
-        println_debug!("Shell: {shell_result:?}");
-        let message_received: Message = shell_result.try_into().context("Deser JupyterMessage")?;
-        println_debug!("Shell: {message_received:?}");
+        let message_received: Message = match shell_result.clone().try_into(){
+            Ok(message_received) => message_received,
+            Err(err) => {
+                println_debug!("RECV SHELL: {:}", zmq_message_pretty_print(shell_result));
+                println_debug!("Unable to decode received message: {err:?}");
+                continue;
+            }
+        };
+        println_debug!("RECV SHELL:: {message_received}");
         
         publish_kernel_status(
             &mut iopub_socket,
@@ -74,7 +81,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                     header: Header {
                         message_id: Uuid::new_v4().into(),
                         message_type: MessageType::KernelInfoReply,
-                        date: Utc::now().to_rfc3339(),
+                        date: iso_8601_Z_now(),
                         session: kernel_session_id.clone().into(),
                         username: "Nickkerish Kernel".into(),
                         version: KERNEL_MESSAGING_VERSION.into(),
@@ -99,7 +106,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                     header: Header {
                         message_id: Uuid::new_v4().into(),
                         message_type: MessageType::ExecuteReply,
-                        date: Utc::now().to_rfc3339(),
+                        date: iso_8601_Z_now(),
                         session: kernel_session_id.clone().into(),
                         username: "Nickkerish Kernel".into(),
                         version: KERNEL_MESSAGING_VERSION.into(),
@@ -130,7 +137,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                     header: Header {
                         message_id: Uuid::new_v4().into(),
                         message_type: MessageType::IsCompleteRequest,
-                        date: Utc::now().to_rfc3339(),
+                        date: iso_8601_Z_now(),
                         session: kernel_session_id.clone().into(),
                         username: "Nickkerish Kernel".into(),
                         version: KERNEL_MESSAGING_VERSION.into(),
@@ -150,8 +157,12 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
             MessageType::HistoryRequest=>{
                 println_debug!("HistoryRequest received... TODO: Respond");
             },
-            
-
+            MessageType::CommOpen=>{
+                println_debug!("CommOpen received... TODO: Respond");
+            },
+            MessageType::CommMsg=>{
+                println_debug!("CommMsg received... TODO: Respond");
+            },
             // TODO: it is a bit dumb to have incoming and outgoing message types together maybe?
             //MessageType::IsCompleteReply=>unreachable!("This is an outgoing only message type"),
             MessageType::ExecuteResult=>unreachable!("This is an outgoing only message type"),
@@ -176,10 +187,8 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
 async fn handel_heartbeat(mut heartbeat_socket: zeromq::RepSocket) -> Result<()> {
     loop {
         let message = heartbeat_socket.recv().await?;
-        debug!("recieved heartbeat message {message:?}");
-        heartbeat_socket
-            .send(zeromq::ZmqMessage::from(b"ping".to_vec()))
-            .await?;
+        //debug!("Received heartbeat message {message:?}");
+        heartbeat_socket.send(message).await?;
     }
 }
 
@@ -198,7 +207,7 @@ async fn publish_kernel_status(
         header: Header {
             message_id: Uuid::new_v4().into(),
             message_type: MessageType::Status,
-            date: Utc::now().to_rfc3339(),
+            date: iso_8601_Z_now(),
             session: kernel_session_id.into(),
             username: "Nickkerish Kernel".into(),
             version: KERNEL_MESSAGING_VERSION.into(),
@@ -228,7 +237,7 @@ async fn publish_execution_result(
         header: Header {
             message_id: Uuid::new_v4().into(),
             message_type: MessageType::ExecuteResult,
-            date: Utc::now().to_rfc3339(),
+            date: iso_8601_Z_now(),
             session: kernel_session_id.into(),
             username: "Nickkerish Kernel".into(),
             version: KERNEL_MESSAGING_VERSION.into(),

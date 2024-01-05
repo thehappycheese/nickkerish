@@ -10,6 +10,7 @@ mod message_content_error;
 mod message_content_history;
 mod message_content_is_complete;
 mod message_content_execute;
+mod message_content_comm_open;
 
 pub use message_reply_status::ReplyStatus;
 pub use message::Message;
@@ -22,7 +23,7 @@ pub use message_content_error::ErrorReply;
 pub use message_content_history::{HistoryAccessType, HistoryRequest};
 pub use message_content_is_complete::{IsCompleteReply, IsCompleteRequest, IsCompleteReplyStatus};
 pub use message_content_execute::{ExecuteReply, ExecuteRequest, ExecuteReplyStatus, ExecuteResultPublication};
-
+pub use message_content_comm_open::CommOpen;
 
 pub type HmacSha256 = hmac::Hmac<sha2::Sha256>;
 pub const DELIMITER: &[u8] = b"<IDS|MSG>";
