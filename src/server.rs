@@ -21,7 +21,8 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
     // Create a ZMQ context
 
     // Create and connect the shell socket
-    let kernel_session_id: String = Uuid::new_v4().into(); // TODO: generate guid
+    let kernel_session_id: String = Uuid::new_v4().into();
+    let username: String = "username".to_string(); // TODO: the spec isn't clear if the kernel replies should actually contain this field or not, or what the value should be when responding
 
     let mut shell_socket: zeromq::RouterSocket =
         connection_information.create_socket_shell().await?;
@@ -48,7 +49,16 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
         &mut iopub_socket,
         &kernel_session_id,
         &connection_information.key,
+        &username,
         ExecutionState::Starting,
+    ).await?;
+
+    publish_kernel_status(
+        &mut iopub_socket,
+        &kernel_session_id,
+        &connection_information.key,
+        &username,
+        ExecutionState::Idle,
     ).await?;
 
     loop{
@@ -67,6 +77,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
             &mut iopub_socket,
             &kernel_session_id,
             &connection_information.key,
+            &username,
             ExecutionState::Busy,
         ).await?;
         
@@ -83,16 +94,16 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                         message_type: MessageType::KernelInfoReply,
                         date: iso_8601_Z_now(),
                         session: kernel_session_id.clone().into(),
-                        username: "Nickkerish Kernel".into(),
+                        username: username.clone().into(),
                         version: KERNEL_MESSAGING_VERSION.into(),
                     }.into(),
                     parent_header: message_header.clone().into(),
                     content: MessageContent::from(KernelInfoReply::default()).into(),
                     ..Default::default()
                 };
-                //println_debug!("Sending KernelInfoReply {response:?}");
+                println_debug!("Sending KernelInfoReply {response:}");
                 let response = response.to_zmq_message(&connection_information.key)?;
-                println_debug!("Sending KernelInfoReply {response:?}");
+                //println_debug!("Sending KernelInfoReply {response:?}");
                 shell_socket.send(response).await?;
             },
             MessageType::ExecuteRequest=>{
@@ -108,7 +119,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                         message_type: MessageType::ExecuteReply,
                         date: iso_8601_Z_now(),
                         session: kernel_session_id.clone().into(),
-                        username: "Nickkerish Kernel".into(),
+                        username: username.clone().into(),
                         version: KERNEL_MESSAGING_VERSION.into(),
                     }.into(),
                     parent_header: message_header.clone().into(),
@@ -121,13 +132,14 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                     ..Default::default()
                 };
                 
+                println_debug!("Sending ExecuteReply {response:}");
                 let response = response.to_zmq_message(&connection_information.key)?;
-                println_debug!("Sending ExecuteReply {response:?}");
                 shell_socket.send(response).await?;
                 publish_execution_result(
                     &mut iopub_socket,
                     &kernel_session_id,
                     &connection_information.key,
+                    &username,
                     &format!("You tried to execute `{code_to_execute:?}`, but Nickkerish is a dummy kernel, and does not do what you want!")
                 ).await?;
             },
@@ -139,7 +151,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                         message_type: MessageType::IsCompleteRequest,
                         date: iso_8601_Z_now(),
                         session: kernel_session_id.clone().into(),
-                        username: "Nickkerish Kernel".into(),
+                        username: username.clone().into(),
                         version: KERNEL_MESSAGING_VERSION.into(),
                     }.into(),
                     parent_header: message_header.clone().into(),
@@ -150,8 +162,8 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                     ..Default::default()
                 };
                 //println_debug!("Sending IsCompleteReply {response:?}");
+                println_debug!("Sending IsCompleteReply {response}");
                 let response = response.to_zmq_message(&connection_information.key)?;
-                println_debug!("Sending IsCompleteReply {response:?}");
                 shell_socket.send(response).await?;
             },
             MessageType::HistoryRequest=>{
@@ -175,6 +187,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
             &mut iopub_socket,
             &kernel_session_id,
             &connection_information.key,
+            &username,
             ExecutionState::Idle,
         ).await?;
     }
@@ -196,6 +209,7 @@ async fn publish_kernel_status(
     iopub_socket: &mut zeromq::PubSocket,
     kernel_session_id: &str,
     key: &str,
+    username: &str,
     status: ExecutionState,
 ) -> Result<()> {
     let message = Message {
@@ -209,13 +223,13 @@ async fn publish_kernel_status(
             message_type: MessageType::Status,
             date: iso_8601_Z_now(),
             session: kernel_session_id.into(),
-            username: "Nickkerish Kernel".into(),
+            username: username.into(),
             version: KERNEL_MESSAGING_VERSION.into(),
         }
         .into(),
         ..Default::default()
     };
-    println_debug!("PublishingKernel Status: {message:?}");
+    println_debug!("PublishingKernel Status: {message}");
     iopub_socket.send(message.to_zmq_message(key)?).await?;
     Ok(())
 }
@@ -224,6 +238,7 @@ async fn publish_execution_result(
     iopub_socket: &mut zeromq::PubSocket,
     kernel_session_id: &str,
     key: &str,
+    username: &str,
     execution_result:&str
 )-> Result<()>{
     let message = Message {
@@ -239,13 +254,13 @@ async fn publish_execution_result(
             message_type: MessageType::ExecuteResult,
             date: iso_8601_Z_now(),
             session: kernel_session_id.into(),
-            username: "Nickkerish Kernel".into(),
+            username: username.into(),
             version: KERNEL_MESSAGING_VERSION.into(),
         }
         .into(),
         ..Default::default()
     };
-    println_debug!("Publishing Execution Result: {message:?}");
+    println_debug!("Publishing Execution Result: {message}");
     iopub_socket.send(message.to_zmq_message(key)?).await?;
     Ok(())
 }

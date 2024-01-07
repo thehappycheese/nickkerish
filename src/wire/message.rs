@@ -7,26 +7,13 @@ use super::{
 use crate::util::EmptyObjectOr;
 use crate::util::TryFromJsonBytesString;
 use crate::util::TryToJsonBytesString;
+use crate::util::abbreviate_string;
 
 use anyhow::Context;
 use anyhow::Result;
 use bytes::Bytes;
 use hmac::Mac;
 use zeromq::ZmqMessage;
-
-
-fn abbreviate_string(s: &str) -> String {
-    let threshold = 10;
-    let ellipsis = "...";
-
-    if s.len() > threshold {
-        let start = &s[..5]; // First 5 characters
-        let end = &s[s.len()-5..]; // Last 5 characters
-        format!("{}{}{}", start, ellipsis, end)
-    } else {
-        s.to_string()
-    }
-}
 
 
 /// A deserialized ZMQ Jupyter Message
@@ -55,9 +42,8 @@ pub struct Message {
     pub parent_header: EmptyObjectOr<Header>,
     pub metadata: serde_json::Map<String, serde_json::Value>,
     pub content: EmptyObjectOr<MessageContent>,
-    /// After the serialized dicts are zero to many raw data buffers, which can be used by message
-    /// types that support binary data, which can be used in custom messages, such as comms and
-    /// extensions to the protocol.
+    /// Raw data buffers, which can be used by message types that support binary data such as comms
+    /// and extensions to the protocol.
     pub extra_buffers: Vec<Bytes>,
 }
 

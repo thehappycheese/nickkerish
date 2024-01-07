@@ -27,4 +27,4 @@ pub use message_content_comm_open::CommOpen;
 
 pub type HmacSha256 = hmac::Hmac<sha2::Sha256>;
 pub const DELIMITER: &[u8] = b"<IDS|MSG>";
-pub const KERNEL_MESSAGING_VERSION:&'static str = "5.4";
+pub const KERNEL_MESSAGING_VERSION:&'static str = "5.3";
