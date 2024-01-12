@@ -1,3 +1,6 @@
+use std::vec;
+
+use super::header;
 use super::{
     HmacSha256,
     Header,
@@ -7,18 +10,29 @@ use super::{
 use crate::util::EmptyObjectOr;
 use crate::util::TryFromJsonBytesString;
 use crate::util::TryToJsonBytesString;
-use crate::util::abbreviate_string;
 
-use anyhow::Context;
 use anyhow::Result;
 use bytes::Bytes;
 use hmac::Mac;
 use zeromq::ZmqMessage;
 
 
-/// A deserialized ZMQ Jupyter Message
-#[derive(Debug, Default)]
-pub struct Message {
+fn compute_signature(key:&str, header: &Bytes, parent_header: &Bytes, metadata: &Bytes, content: &Bytes, extra_buffers:&Vec<Bytes>) -> Result<Bytes> {
+    let mut mac = HmacSha256::new_from_slice(key.as_bytes())?;
+    mac.update(header);
+    mac.update(parent_header);
+    mac.update(metadata);
+    mac.update(content);
+    for buffer in extra_buffers {
+        mac.update(buffer);
+    }
+    let mac:Vec<u8> = mac.finalize().into_bytes().to_vec();
+    Ok(mac.into())
+}
+
+
+#[derive(Debug)]
+pub struct MessageBytes {
     /// When this message is to be a response to a received message, then just copy the identities
     /// from the received message. For iopub messages this is just a single value
     /// and is the "topic" by convention is the message type.
@@ -29,31 +43,135 @@ pub struct Message {
     /// > kernel.{u-u-i-d}.execute_result or stream.stdout
     /// 
     /// See <https://jupyter-client.readthedocs.io/en/latest/messaging.html#the-wire-protocol>
-    pub identities: Vec<Bytes>,
-
-    /// The signature is the HMAC hex digest of the concatenation of:
+    identities: Vec<Bytes>,
+    /// The signature must be the HMAC hex digest of the concatenation of:
     /// - A shared key (typically the key field of a connection file)
     /// - The serialized header dict
     /// - The serialized parent header dict
     /// - The serialized metadata dict
     /// - The serialized content dict
-    pub signature: Bytes,
+    signature: Bytes,
+
+    /// the header for this message
+    header: Bytes,
+    /// the header copied from the message that caused this message (or an empty dict)
+    parent_header: Bytes,
+    metadata: Bytes,
+    content: Bytes,
+    extra_buffers: Vec<Bytes>,
+}
+
+impl MessageBytes{
+    fn compute_signature(&self, key: &str) -> Result<Bytes> {
+        compute_signature(key, &self.header, &self.parent_header, &self.metadata, &self.content, &self.extra_buffers)
+    }
+    fn validate_signature(&self, key: &str) -> Result<()> {
+        let signature = self.compute_signature(key)?;
+        let signature = hex::encode(signature);
+        if signature == self.signature {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(format!("Signature validation failed {:?} != {:?}",signature, self.signature)))
+        }
+    }
+    pub fn decode(self, key:&str) -> Result<MessageParsed> {
+        self.validate_signature(key)?;
+        Ok(MessageParsed{
+            key           : key.to_owned(),
+            identities    : self.identities,
+            header        : TryFromJsonBytesString::try_from_json_bytes(&self.header)?,
+            parent_header : TryFromJsonBytesString::try_from_json_bytes(&self.parent_header)?,
+            metadata      : TryFromJsonBytesString::try_from_json_bytes(&self.metadata)?,
+            content       : TryFromJsonBytesString::try_from_json_bytes(&self.content)?,
+            extra_buffers : self.extra_buffers,
+        })
+    }
+}
+
+impl std::fmt::Display for MessageBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            //"[Message]{{\n\tidentities: [{:}],\n\tsignature: {:}\n\theader: {:}\n\tparent_header: {:}\n\tmetadata: {:}\n\tcontent: {:}\n\textra_buffers: [{:}]}}",
+            "[MessageBytes]{{\n\tidentities: [{:?}],\n\tsignature: {:?},\n\theader: {:?}\n\tparent_header: {:?}\n\tmetadata: {:?}\n\tcontent: {:?}\n\textra_buffers: [{:?}]}}",
+            self.identities.len(),
+            self.header,
+            self.signature,
+            self.parent_header,
+            self.metadata,
+            self.content,
+            self.extra_buffers.len()
+        )
+    }
+}
+
+impl From<ZmqMessage> for MessageBytes {
+    fn from(message: ZmqMessage) -> Self {
+        let message = message.into_vec();
+        let delimiter_index = message.iter().position(|frame| frame == &DELIMITER).unwrap();
+        MessageBytes {
+            identities    : message[0..delimiter_index].into(),
+            signature     : message[delimiter_index + 1].clone(),
+            header        : message[delimiter_index + 2].clone(),
+            parent_header : message[delimiter_index + 3].clone(),
+            metadata      : message[delimiter_index + 4].clone(),
+            content       : message[delimiter_index + 5].clone(),
+            extra_buffers : message[delimiter_index + 6..].into(),
+        }
+    }
+}
+
+impl Into<ZmqMessage> for MessageBytes {
+    fn into(self) -> ZmqMessage {
+        let mut frames = Vec::new();
+        frames.extend(self.identities);
+        frames.push(self.signature);
+        frames.push(self.header);
+        frames.push(self.parent_header);
+        frames.push(self.metadata);
+        frames.push(self.content);
+        frames.extend(self.extra_buffers);
+        // NOTE: Empty Message Error is not possible since `frames.len()>0`
+        ZmqMessage::try_from(frames).unwrap()
+    }
+}
+
+/// A deserialized ZMQ Jupyter Message
+#[derive(Debug, Default)]
+pub struct MessageParsed {
+    
+    /// The key which will/was used to to sign the message
+    pub key: String,
+
+    /// Identities are part of the ZMQ protocol and are used for routing.
+    /// We don't know why multiple identities might be needed? The whole delimiter business is very annoying.
+    /// 
+    pub identities: Vec<Bytes>,
+    
+    /// the header for this message
     pub header: EmptyObjectOr<Header>,
+
+    /// A copy of the header form the message that 'caused' this message
     pub parent_header: EmptyObjectOr<Header>,
+
+    /// Any valid JSON inside an object, or an empty object {}
     pub metadata: serde_json::Map<String, serde_json::Value>,
+
+    /// Any valid JSON message content inside an object, or an empty object {}
     pub content: EmptyObjectOr<MessageContent>,
+
     /// Raw data buffers, which can be used by message types that support binary data such as comms
     /// and extensions to the protocol.
     pub extra_buffers: Vec<Bytes>,
 }
 
-impl std::fmt::Display for Message {
+impl std::fmt::Display for MessageParsed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "[Message]{{\n\tidentities: [{:}],\n\tsignature: {:}\n\theader: {:}\n\tparent_header: {:}\n\tmetadata: {:}\n\tcontent: {:}\n\textra_buffers: [{:}]}}",
+            //"[Message]{{\n\tidentities: [{:}],\n\tsignature: {:}\n\theader: {:}\n\tparent_header: {:}\n\tmetadata: {:}\n\tcontent: {:}\n\textra_buffers: [{:}]}}",
+            "[Message]{{\n\tidentities: [{:}],\n\theader: {:}\n\tparent_header: {:}\n\tmetadata: {:}\n\tcontent: {:}\n\textra_buffers: [{:}]}}",
             self.identities.len(),
-            abbreviate_string(&format!("{:?}", &self.signature)),
             serde_json::to_string(&self.header).unwrap(),
             serde_json::to_string(&self.parent_header).unwrap(),
             serde_json::to_string(&self.metadata).unwrap(),
@@ -63,81 +181,108 @@ impl std::fmt::Display for Message {
     }
 }
 
-impl TryFrom<ZmqMessage> for Message {
-    type Error = anyhow::Error;
-    fn try_from(message: ZmqMessage) -> Result<Self> {
-        // find the index of the delimiter
-        let frames = message.into_vec();
-        let delimiter_index = frames.iter().position(|frame| frame == &DELIMITER).unwrap();
-        Ok(Message {
-            identities    : frames[0..delimiter_index].into(),
-            signature     : frames[delimiter_index + 1].clone(),
-            header        : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 2]).context("Failed to decode .header in TryFrom<ZmqMessage> for Message")?,
-            parent_header : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 3]).context("Failed to decode .parent_header in TryFrom<ZmqMessage> for Message")?,
-            metadata      : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 4]).context("Failed to decode .metadata in TryFrom<ZmqMessage> for Message")?,
-            content       : TryFromJsonBytesString::try_from_json_bytes(&frames[delimiter_index + 5]).context(format!("Failed to decode .content in TryFrom<ZmqMessage> for Message;\n {:?}", &frames[delimiter_index + 5]))?,
-            extra_buffers : frames[delimiter_index + 6..].into(),
+impl MessageParsed {
+    pub fn new(
+        key: String,
+        identities: Vec<Bytes>,
+        header: EmptyObjectOr<Header>,
+        parent_header: EmptyObjectOr<Header>,
+        metadata: serde_json::Map<String, serde_json::Value>,
+        content: EmptyObjectOr<MessageContent>,
+        extra_buffers: Vec<Bytes>,
+    ) -> Self {
+        MessageParsed {
+            key           : key,
+            identities    : identities,
+            header        : header,
+            parent_header : parent_header,
+            metadata      : metadata,
+            content       : content,
+            extra_buffers : extra_buffers,
+        }
+    }
+
+    pub fn reply(
+        &self,
+        header: Header,
+        content: EmptyObjectOr<MessageContent>,
+        metadata: serde_json::Map<String, serde_json::Value>,
+        extra_buffers: Vec<Bytes>,
+    ) -> MessageParsed {
+        MessageParsed{
+            key: self.key.clone(),
+            identities: self.identities.clone(),
+            header: EmptyObjectOr::Object(header),
+            parent_header: self.header.clone(),
+            metadata: metadata,
+            content: content,
+            extra_buffers: extra_buffers,
+        }
+    }
+
+    pub fn encode(self) -> Result<MessageBytes> {
+        let header        = (&self.header       ).try_to_json_bytes()?;
+        let parent_header = (&self.parent_header).try_to_json_bytes()?;
+        let metadata      = (&self.metadata     ).try_to_json_bytes()?;
+        let content       = (&self.content      ).try_to_json_bytes()?;
+        let signature = compute_signature(
+            &self.key,
+            &header,
+            &parent_header,
+            &metadata,
+            &content,
+            &self.extra_buffers
+        )?;
+        Ok(MessageBytes{
+            identities    : self.identities.clone(),
+            signature     ,
+            header        ,
+            parent_header ,
+            metadata      ,
+            content       ,
+            extra_buffers : self.extra_buffers,
         })
     }
-}
-
-impl Message {
-    /// Could not use `TryInto` trait because key must be provided
-    pub fn to_zmq_message(&self, key: &str) -> Result<ZmqMessage> {
-        let mut frames: Vec<Bytes> = vec![];
-        frames.extend(self.identities.clone());
-        frames.push(DELIMITER.into());
-        frames.push(self.compute_signature(key)?.into());
-        frames.push(self.header.try_to_json_bytes()?);
-        frames.push(self.parent_header.try_to_json_bytes()?);
-        frames.push(serde_json::to_string(&self.metadata)?.into());
-        frames.push(serde_json::to_string(&self.content)?.into());
-        frames.extend(self.extra_buffers.clone());
-        ZmqMessage::try_from(frames).map_err(|e| anyhow::anyhow!(e))
-    }
-
-    fn compute_signature(&self, key: &str) -> Result<String> {
-        let mut signature = HmacSha256::new_from_slice(key.as_bytes())?;
-        signature.update(self.header.try_to_json_string()?.as_bytes());
-        signature.update(self.parent_header.try_to_json_string()?.as_bytes());
-        signature.update(serde_json::to_string(&self.metadata)?.as_bytes());
-        signature.update(self.content.try_to_json_string()?.as_bytes());
-        let signature = hex::encode(signature.finalize().into_bytes());
-        Ok(signature)
-    }
+    
 }
 
 
-#[cfg(test)]
-mod tests {
-    use zeromq::ZmqMessage;
-    use crate::wire::KernelInfoReply;
+// #[cfg(test)]
+// mod tests {
+//     use zeromq::ZmqMessage;
+//     use crate::wire::KernelInfoReply;
+//     use super::*;
 
-    use super::*;
-    #[test]
-    fn test_default_message(){
-        let result = Message::default();
-        println!("{result:?}");
-        let result = result.to_zmq_message("test_dummy_key").unwrap();
-        println!("{result:?}");
-    }
-    #[test]
-    fn default_kernel_info_reply() {
-        let content = KernelInfoReply::default();
-        let message = Message {
-            content: MessageContent::KernelInfoReply(content).into(),
-            ..Default::default()
-        };
-        let message: ZmqMessage = message.to_zmq_message("test_dummy_key").unwrap();
-        println!("Default kernel reply message: {:?}", message);
-    }
-    #[test]
-    fn default_display_message() {
-        let content = KernelInfoReply::default();
-        let message = Message {
-            content: MessageContent::KernelInfoReply(content).into(),
-            ..Default::default()
-        };
-        println!("{message}");
-    }
-}
+//     #[test]
+//     fn default_kernel_info_reply() {
+//         let content = KernelInfoReply::default();
+//         let message = MessageParsed {
+//             content: MessageContent::KernelInfoReply(content).into(),
+//             ..Default::default()
+//         };
+//         let message: ZmqMessage = message.to_zmq_message("test_dummy_key").unwrap();
+//         println!("Default kernel reply message: {:?}", message);
+//     }
+//     #[test]
+//     fn default_display_message() {
+//         let content = KernelInfoReply::default();
+//         let message = MessageParsed {
+//             content: MessageContent::KernelInfoReply(content).into(),
+//             ..Default::default()
+//         };
+//         println!("{message}");
+//     }
+
+//     #[test]
+//     fn test_signature_computation() {
+//         let content = KernelInfoReply::default();
+//         let message = MessageParsed {
+//             content: MessageContent::KernelInfoReply(content).into(),
+//             ..Default::default()
+//         };
+//         println!("{message}");
+//         let signature = message.compute_signature("test_dummy_key").unwrap();
+//         println!("{signature}");
+//     }
+    
+// }

@@ -13,7 +13,7 @@ mod message_content_execute;
 mod message_content_comm_open;
 
 pub use message_reply_status::ReplyStatus;
-pub use message::Message;
+pub use message::{MessageBytes, MessageParsed};
 pub use message_type::MessageType;
 pub use header::Header;
 pub use message_content::MessageContent;

@@ -14,6 +14,7 @@ A dummy Jupyter Kernel implemented in Rust using ZeroMQ
     - [6.1.3. `stdin` Router](#613-stdin-router)
     - [6.1.4. `control` Router](#614-control-router)
     - [6.1.5. `heartbeat` Rep](#615-heartbeat-rep)
+  - [Identities](#identities)
 - [7. Other Notes and Shell Snippets](#7-other-notes-and-shell-snippets)
 
 ## 1. Introduction
@@ -129,6 +130,20 @@ The critical messages are:
 Kernel muse echo back immediately when receiving a message on this channel.
 Typically the message received will be a single frame containing `b"ping"`.
 
+### Identities
+
+The first frame(s) of a ZMQMessage before the delimiter `b"<IDS|MSG>"` are
+called Identities. They are used by ZMQ for message routing. They must be cloned
+onto any response messages.
+
+For the `iopub` socket this is just a single frame containing the message
+`topic`. By convention the `topic` is just a clone of the
+`header.message_type`
+
+> Some implementations may append additional information to the `topic`;e.g.
+> `b"kernel.{u-u-i-d}.execute_result"` or `b"stream.stdout"` etc. Generally
+> clients just subscribe to all topics, so the specific value may not be
+> important.
 
 ## 7. Other Notes and Shell Snippets
 

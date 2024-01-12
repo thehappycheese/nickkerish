@@ -3,12 +3,26 @@ use std::collections::HashMap;
 use crate::{
     connection::ConnectionInformation,
     wire::{
-        Header, MessageContent, MessageType, ExecutionState, Message,
-        KernelInfoReply, StatusPublication, KERNEL_MESSAGING_VERSION, IsCompleteReply, IsCompleteReplyStatus, ExecuteReply, ExecuteResultPublication,
-    }, util::{iso_8601_Z_now, zmq_message_pretty_print},
+        KERNEL_MESSAGING_VERSION,
+
+        MessageBytes,
+        MessageParsed,
+        Header,
+            MessageType,
+        MessageContent,
+            ExecutionState,
+
+        KernelInfoReply,
+        StatusPublication,
+        IsCompleteReply,
+        IsCompleteReplyStatus,
+        ExecuteReply,
+        ExecuteResultPublication,
+    },
+    util::{iso_8601_Z_now, zmq_message_pretty_print, EmptyObjectOr},
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use bytes::Bytes;
 use tracing::debug;
 use uuid::Uuid;
@@ -18,9 +32,8 @@ use zeromq::{SocketRecv, SocketSend};
 
 pub async fn serve(connection_information: ConnectionInformation) -> Result<()> {
     println_debug!("Server Connecting...");
-    // Create a ZMQ context
-
-    // Create and connect the shell socket
+    
+    // Define global constants
     let kernel_session_id: String = Uuid::new_v4().into();
     let username: String = "username".to_string(); // TODO: the spec isn't clear if the kernel replies should actually contain this field or not, or what the value should be when responding
 
@@ -63,10 +76,17 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
 
     loop{
         let shell_result = shell_socket.recv().await?;
-        let message_received: Message = match shell_result.clone().try_into(){
+        let message_received: MessageBytes = match shell_result.clone().try_into(){
             Ok(message_received) => message_received,
             Err(err) => {
                 println_debug!("RECV SHELL: {:}", zmq_message_pretty_print(shell_result));
+                println_debug!("Unable to unpack received message: {err:?}");
+                continue;
+            }
+        };
+        let message_received = match message_received.decode(&connection_information.key){
+            Ok(message_received)=>message_received,
+            Err(err)=>{
                 println_debug!("Unable to decode received message: {err:?}");
                 continue;
             }
@@ -83,105 +103,104 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
         
         // TODO: Incoming messages should always have a header
         //       So should outgoing messages... when does a message not have a header?
-        let message_header = message_received.header.unwrap();
+        // TODO: this nesting sucks
+        if let EmptyObjectOr::Object(message_header) = &message_received.header {
 
-        match message_header.message_type {
-            MessageType::KernelInfoRequest=>{
-                let response = Message {
-                    identities: message_received.identities.clone(),
-                    header: Header {
-                        message_id: Uuid::new_v4().into(),
-                        message_type: MessageType::KernelInfoReply,
-                        date: iso_8601_Z_now(),
-                        session: kernel_session_id.clone().into(),
-                        username: username.clone().into(),
-                        version: KERNEL_MESSAGING_VERSION.into(),
-                    }.into(),
-                    parent_header: message_header.clone().into(),
-                    content: MessageContent::from(KernelInfoReply::default()).into(),
-                    ..Default::default()
-                };
-                println_debug!("Sending KernelInfoReply {response:}");
-                let response = response.to_zmq_message(&connection_information.key)?;
-                //println_debug!("Sending KernelInfoReply {response:?}");
-                shell_socket.send(response).await?;
-            },
-            MessageType::ExecuteRequest=>{
-                let mut code_to_execute = None;
-                if let MessageContent::ExecuteRequest(execute_request) = message_received.content.unwrap(){
-                    code_to_execute = Some(execute_request.code.clone());
-                }
-                println_debug!("Tried to execute {code_to_execute:?}");
-                let response = Message {
-                    identities: message_received.identities.clone(),
-                    header: Header {
-                        message_id: Uuid::new_v4().into(),
-                        message_type: MessageType::ExecuteReply,
-                        date: iso_8601_Z_now(),
-                        session: kernel_session_id.clone().into(),
-                        username: username.clone().into(),
-                        version: KERNEL_MESSAGING_VERSION.into(),
-                    }.into(),
-                    parent_header: message_header.clone().into(),
-                    content: MessageContent::from(ExecuteReply {
-                        status: crate::wire::ExecuteReplyStatus::Ok,
-                        execution_count: 1,
-                        payload: None,
-                        user_expressions: None,
-                    }).into(),
-                    ..Default::default()
-                };
-                
-                println_debug!("Sending ExecuteReply {response:}");
-                let response = response.to_zmq_message(&connection_information.key)?;
-                shell_socket.send(response).await?;
-                publish_execution_result(
-                    &mut iopub_socket,
-                    &kernel_session_id,
-                    &connection_information.key,
-                    &username,
-                    &format!("You tried to execute `{code_to_execute:?}`, but Nickkerish is a dummy kernel, and does not do what you want!")
-                ).await?;
-            },
-            MessageType::IsCompleteRequest=>{
-                let response = Message {
-                    identities: message_received.identities.clone(),
-                    header: Header {
-                        message_id: Uuid::new_v4().into(),
-                        message_type: MessageType::IsCompleteRequest,
-                        date: iso_8601_Z_now(),
-                        session: kernel_session_id.clone().into(),
-                        username: username.clone().into(),
-                        version: KERNEL_MESSAGING_VERSION.into(),
-                    }.into(),
-                    parent_header: message_header.clone().into(),
-                    content: MessageContent::from(IsCompleteReply {
-                        status: IsCompleteReplyStatus::Complete,
-                        indent: None,
-                    }).into(),
-                    ..Default::default()
-                };
-                //println_debug!("Sending IsCompleteReply {response:?}");
-                println_debug!("Sending IsCompleteReply {response}");
-                let response = response.to_zmq_message(&connection_information.key)?;
-                shell_socket.send(response).await?;
-            },
-            MessageType::HistoryRequest=>{
-                println_debug!("HistoryRequest received... TODO: Respond");
-            },
-            MessageType::CommOpen=>{
-                println_debug!("CommOpen received... TODO: Respond");
-            },
-            MessageType::CommMsg=>{
-                println_debug!("CommMsg received... TODO: Respond");
-            },
-            // TODO: it is a bit dumb to have incoming and outgoing message types together maybe?
-            //MessageType::IsCompleteReply=>unreachable!("This is an outgoing only message type"),
-            MessageType::ExecuteResult=>unreachable!("This is an outgoing only message type"),
-            MessageType::IsCompleteReply=>unreachable!("This is an outgoing only message type"),
-            MessageType::KernelInfoReply=>unreachable!("This is an outgoing only message type"),
-            MessageType::ExecuteReply =>unreachable!("This is an outgoing only message type"),
-            MessageType::Status=>unreachable!("This is an outgoing only message type"),
+            match message_header.message_type {
+                MessageType::KernelInfoRequest=>{
+                    let response = message_received.reply(
+                        Header {
+                            message_id: Uuid::new_v4().into(),
+                            message_type: MessageType::KernelInfoReply,
+                            date: iso_8601_Z_now(),
+                            session: kernel_session_id.clone().into(),
+                            username: username.clone().into(),
+                            version: KERNEL_MESSAGING_VERSION.into(),
+                        }.into(),
+                        MessageContent::from(KernelInfoReply::default()).into(),
+                        Default::default(),
+                        Default::default()
+                    );
+                    println_debug!("Sending KernelInfoReply {response:}");
+                    //let response = response.to_zmq_message(&connection_information.key)?;
+                    //println_debug!("Sending KernelInfoReply {response:?}");
+                    shell_socket.send(response.encode()?.into()).await?;
+                },
+                MessageType::ExecuteRequest=>{
+                    let mut code_to_execute = None;
+                    if let EmptyObjectOr::Object(MessageContent::ExecuteRequest(execute_request)) = &message_received.content{
+                        code_to_execute = Some(execute_request.code.clone());
+                    }
+                    println_debug!("Tried to execute {code_to_execute:?}");
+                    let response = message_received.reply(
+                        Header {
+                            message_id: Uuid::new_v4().into(),
+                            message_type: MessageType::ExecuteReply,
+                            date: iso_8601_Z_now(),
+                            session: kernel_session_id.clone().into(),
+                            username: username.clone().into(),
+                            version: KERNEL_MESSAGING_VERSION.into(),
+                        },
+                        MessageContent::from(ExecuteReply {
+                            status: crate::wire::ExecuteReplyStatus::Ok,
+                            execution_count: 1,
+                            payload: None,
+                            user_expressions: None,
+                        }).into(),
+                        Default::default(),
+                        Default::default()
+                        
+                    );
+                    
+                    println_debug!("Sending ExecuteReply {response:}");
+                    
+                    shell_socket.send(response.encode()?.into()).await?;
+                    publish_execution_result(
+                        &mut iopub_socket,
+                        &kernel_session_id,
+                        &connection_information.key,
+                        &username,
+                        &format!("You tried to execute `{code_to_execute:?}`, but Nickkerish is a dummy kernel, and does not do what you want!")
+                    ).await?;
+                },
+                MessageType::IsCompleteRequest=>{
+                    let response = message_received.reply(
+                        Header {
+                            message_id: Uuid::new_v4().into(),
+                            message_type: MessageType::IsCompleteRequest,
+                            date: iso_8601_Z_now(),
+                            session: kernel_session_id.clone().into(),
+                            username: username.clone().into(),
+                            version: KERNEL_MESSAGING_VERSION.into(),
+                        },
+                        MessageContent::from(IsCompleteReply {
+                            status: IsCompleteReplyStatus::Complete,
+                            indent: None,
+                        }).into(),
+                        Default::default(),
+                        Default::default()
+                    );
+                    //println_debug!("Sending IsCompleteReply {response:?}");
+                    println_debug!("Sending IsCompleteReply {response}");
+                    shell_socket.send(response.encode()?.into()).await?;
+                },
+                MessageType::HistoryRequest=>{
+                    println_debug!("HistoryRequest received... TODO: Respond");
+                },
+                MessageType::CommOpen=>{
+                    println_debug!("CommOpen received... TODO: Respond");
+                },
+                MessageType::CommMsg=>{
+                    println_debug!("CommMsg received... TODO: Respond");
+                },
+                // TODO: it is a bit dumb to have incoming and outgoing message types together maybe?
+                //MessageType::IsCompleteReply=>unreachable!("This is an outgoing only message type"),
+                MessageType::ExecuteResult=>unreachable!("This is an outgoing only message type"),
+                MessageType::IsCompleteReply=>unreachable!("This is an outgoing only message type"),
+                MessageType::KernelInfoReply=>unreachable!("This is an outgoing only message type"),
+                MessageType::ExecuteReply =>unreachable!("This is an outgoing only message type"),
+                MessageType::Status=>unreachable!("This is an outgoing only message type"),
+            }
         }
         publish_kernel_status(
             &mut iopub_socket,
@@ -212,7 +231,8 @@ async fn publish_kernel_status(
     username: &str,
     status: ExecutionState,
 ) -> Result<()> {
-    let message = Message {
+    let message = MessageParsed {
+        key:key.into(),
         identities: vec![Bytes::from("kernel_status")], // topic
         content: MessageContent::from(StatusPublication {
             execution_state: status,
@@ -227,10 +247,12 @@ async fn publish_kernel_status(
             version: KERNEL_MESSAGING_VERSION.into(),
         }
         .into(),
-        ..Default::default()
+        metadata: Default::default(),
+        parent_header:Default::default(),
+        extra_buffers:Default::default(),
     };
     println_debug!("PublishingKernel Status: {message}");
-    iopub_socket.send(message.to_zmq_message(key)?).await?;
+    iopub_socket.send(message.encode()?.into()).await?;
     Ok(())
 }
 
@@ -241,7 +263,8 @@ async fn publish_execution_result(
     username: &str,
     execution_result:&str
 )-> Result<()>{
-    let message = Message {
+    let message = MessageParsed {
+        key:key.into(),
         identities: vec![Bytes::from("execute_result")], // topic
         content: MessageContent::from(ExecuteResultPublication {
             execution_count: 1,
@@ -261,6 +284,6 @@ async fn publish_execution_result(
         ..Default::default()
     };
     println_debug!("Publishing Execution Result: {message}");
-    iopub_socket.send(message.to_zmq_message(key)?).await?;
+    iopub_socket.send(message.encode()?.into()).await?;
     Ok(())
 }
