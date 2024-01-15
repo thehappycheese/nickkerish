@@ -76,28 +76,12 @@ pub struct ExecuteReply {
     pub user_expressions: Option<std::collections::HashMap<String, String>>,
 }
 
-// pub struct DisplayDataPublication{
-//     # Who create the data
-//     # Used in V4. Removed in V5.
-//     # 'source' : str,
 
-//     /// The data dict contains key/value pairs, where the keys are MIME
-    /// types and the values are the raw data of the representation in that
-    /// format.
-    /// 
-    /// the object being displayed is that passed to the display hook,
-    /// i.e. the *result* of the execution.
-//     'data' : dict,
-
-//     # Any metadata that describes the data
-//     'metadata' : dict,
-
-//     # Optional transient data introduced in 5.1. Information not to be
-//     # persisted to a notebook or other documents. Intended to live only
-//     # during a live kernel session.
-//     'transient': dict,
-// }
-
+/// Results can have multiple simultaneous formats depending on its configuration. A plain text
+/// representation should always be provided in the text/plain mime-type. Frontends are free to
+/// display any or all of these according to its capabilities. Frontends should ignore mime-types
+/// they do not understand. The data itself is any JSON object and depends on the format. It is
+/// often, but not always a string.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct ExecuteResultPublication{
     /// The counter for this execution is also provided so that clients can
@@ -111,8 +95,29 @@ pub struct ExecuteResultPublication{
     /// 
     /// the object being displayed is that passed to the display hook,
     /// i.e. the *result* of the execution.
-    pub data : HashMap<String, String>,
+    // TODO: Should the map be to a Json Value?
+    pub data : serde_json::Value,
 
     /// Any metadata that describes the data
-    pub metadata : HashMap<String, String>,
+    pub metadata : serde_json::Map<String, serde_json::Value>,
+}
+
+/// To let all frontends know what code is being executed at any given time, these messages contain
+/// a re-broadcast of the code portion of an execute_request, along with the execution_count.
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct ExecuteInputPublication{
+    /// Source code to be executed, one or more lines
+    pub code:String,
+    ///  The counter for this execution is also provided so that clients can display it, since
+    /// IPython automatically creates variables called _iN (for input prompt In[N]).
+    pub execution_count:usize,
+}
+
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct StreamPublication{
+    /// The name of the stream is one of 'stdout', 'stderr'
+    pub name:String,
+    /// The text is an arbitrary string to be written to that stream
+    pub text:String,
 }

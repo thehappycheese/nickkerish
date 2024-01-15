@@ -14,8 +14,11 @@ pub enum MessageType {
     HistoryRequest,
 
     CommOpen,
+    CommClose,
     CommMsg,
     // IO Pub
+    Stream,
     ExecuteResult,
-    Status
+    ExecuteInput,
+    Status,
 }

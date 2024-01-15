@@ -125,6 +125,7 @@ impl Into<ZmqMessage> for MessageBytes {
     fn into(self) -> ZmqMessage {
         let mut frames = Vec::new();
         frames.extend(self.identities);
+        frames.push(DELIMITER.into());
         frames.push(self.signature);
         frames.push(self.header);
         frames.push(self.parent_header);
@@ -225,14 +226,14 @@ impl MessageParsed {
         let parent_header = (&self.parent_header).try_to_json_bytes()?;
         let metadata      = (&self.metadata     ).try_to_json_bytes()?;
         let content       = (&self.content      ).try_to_json_bytes()?;
-        let signature = compute_signature(
+        let signature = Bytes::from(hex::encode(compute_signature(
             &self.key,
             &header,
             &parent_header,
             &metadata,
             &content,
             &self.extra_buffers
-        )?;
+        )?));
         Ok(MessageBytes{
             identities    : self.identities.clone(),
             signature     ,

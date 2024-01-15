@@ -6,7 +6,12 @@ use super::{
     StatusPublication,
     ExecuteRequest,
     ExecuteReply,
-    ExecuteResultPublication, CommOpen,
+    ExecuteResultPublication,
+    CommOpen,
+    CommClose,
+    CommMsg, 
+    ExecuteInputPublication,
+    StreamPublication,
 };
 use serde::{Deserialize, Serialize};
 
@@ -18,8 +23,10 @@ pub enum MessageContent {
     
     ExecuteRequest(ExecuteRequest),
     ExecuteReply(ExecuteReply),
+    ExecuteInputPublication(ExecuteInputPublication),
     ExecuteResultPublication(ExecuteResultPublication),
-    KernelStatusPublication(StatusPublication),
+    StatusPublication(StatusPublication),
+    StreamPublication(StreamPublication),
 
     // TODO: due to the serde untagged the order of variants matters :( These must come below
     //       execution requests for now:
@@ -27,6 +34,8 @@ pub enum MessageContent {
     IsCompleteReply(IsCompleteReply),
 
     CommOpen(CommOpen),
+    CommClose(CommClose),
+    CommMsg(CommMsg),
 }
 
 macro_rules! impl_from_message_content {
@@ -45,16 +54,22 @@ macro_rules! impl_from_message_content {
 // Use the macro for each variant of the MessageContent enum.
 impl_from_message_content! {
     KernelInfoReply => KernelInfoReply,
-    StatusPublication => KernelStatusPublication,
+    StatusPublication => StatusPublication,
     
     HistoryRequest => HistoryRequest,
     
     ExecuteReply => ExecuteReply,
     ExecuteRequest => ExecuteRequest,
     ExecuteResultPublication => ExecuteResultPublication,
+    ExecuteInputPublication => ExecuteInputPublication,
+    StreamPublication => StreamPublication,
 
     IsCompleteRequest => IsCompleteRequest,
-    IsCompleteReply => IsCompleteReply
+    IsCompleteReply => IsCompleteReply,
+
+    CommOpen => CommOpen,
+    CommClose => CommClose,
+    CommMsg => CommMsg
 }
 
 #[cfg(test)]
