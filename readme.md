@@ -6,23 +6,24 @@ A dummy Jupyter Kernel implemented in Rust using ZeroMQ
 - [2. Acknowledgements](#2-acknowledgements)
   - [2.1. Copy pasted Doc-strings](#21-copy-pasted-doc-strings)
   - [2.2. Excvr](#22-excvr)
-- [3. Nicks Docs Notes](#3-nicks-docs-notes)
-  - [3.1. Key Documentation Pages](#31-key-documentation-pages)
-  - [6.1. Sockets](#61-sockets)
-    - [6.1.1. `shell` Router](#611-shell-router)
-    - [6.1.2. `iopub` Pub](#612-iopub-pub)
-    - [6.1.3. `stdin` Router](#613-stdin-router)
-    - [6.1.4. `control` Router](#614-control-router)
-    - [6.1.5. `heartbeat` Rep](#615-heartbeat-rep)
-  - [Identities](#identities)
-- [7. Other Notes and Shell Snippets](#7-other-notes-and-shell-snippets)
+- [3. Usage](#3-usage)
+- [4. Nicks Docs Notes](#4-nicks-docs-notes)
+  - [4.1. Key Documentation Pages](#41-key-documentation-pages)
+  - [4.2. Sockets](#42-sockets)
+    - [4.2.1. `shell` Router](#421-shell-router)
+    - [4.2.2. `iopub` Pub](#422-iopub-pub)
+    - [4.2.3. `stdin` Router](#423-stdin-router)
+    - [4.2.4. `control` Router](#424-control-router)
+    - [4.2.5. `heartbeat` Rep](#425-heartbeat-rep)
+  - [4.3. Identities](#43-identities)
+- [5. Other Notes and Shell Snippets](#5-other-notes-and-shell-snippets)
 
 ## 1. Introduction
 
 I made this to explore what it takes to get a jupyter kernel working in rust.
 
-The compiled binary executable It pretends to offer a non-existent language
-called `Nickkerish` which just echos back any execution requests.
+It pretends to offer a non-existent language called `Nickkerish` which just
+echos back any execution requests.
 
 If this project turns out well, this might serve as a nice reference
 implementation / template other rust projects could use to wrap other rust-based
@@ -44,9 +45,32 @@ Although this crate is my own special kind of mess, I got started by reading
 from the [evcxr](https://github.com/evcxr/evcxr) project. Currently this is
 still a much better implementation than what I came up with here.
 
-## 3. Nicks Docs Notes
+## 3. Usage
 
-### 3.1. Key Documentation Pages
+Build and run using cargo
+
+```shell
+cargo run -- help
+```
+
+Install the kernelspec so that jupyter can find the kernel executable.
+Running it via cargo means you are pointing the kernelspec at the development build; the exe
+somewhere in the target directory:
+
+```shell
+cargo run -- install-kernel-spec
+```
+
+Run the kernel (normally you would not do this manually, this is called by your jupyter front-end
+such as vscode or jupyter labs etc)
+
+```shell
+nickkerish.exe --connection-file "path/to/connection/file.json"
+```
+
+## 4. Nicks Docs Notes
+
+### 4.1. Key Documentation Pages
 
 -
   [Handling messages](https://jupyter-client.readthedocs.io/en/latest/kernels.html#handling-messages)
@@ -65,7 +89,7 @@ still a much better implementation than what I came up with here.
   describes the minimum features required to produce a working kernel (very
   important for my lazy fingers 😊)
 
-### 6.1. Sockets
+### 4.2. Sockets
 
 The sockets are initially baffling to understand, my notes below are based on
 [Messaging in Jupyter](https://jupyter-client.readthedocs.io/en/latest/messaging.html)
@@ -75,7 +99,7 @@ presumably they refer to different queuing and broadcast mechanisms. Some of
 them can only send, some can only receive, some can do both, some broadcast to
 all clients etc.
 
-#### 6.1.1. `shell` Router
+#### 4.2.1. `shell` Router
 
 Most stuff happens over this socket
 
@@ -92,7 +116,7 @@ Most stuff happens over this socket
   and then hits return; the terminal will create an indented new line instead of
   submitting the command for execution.
 
-#### 6.1.2. `iopub` Pub
+#### 4.2.2. `iopub` Pub
 
 Broadcasts messages to all clients
 The critical messages are:
@@ -103,12 +127,12 @@ The critical messages are:
   behavior like that)
 - `execute_result` returns the results of `execute_requests`
 
-#### 6.1.3. `stdin` Router
+#### 4.2.3. `stdin` Router
 
 Allows the kernel to send requests to the client for text/keyboard input which
 is typically piped to stdin.
 
-#### 6.1.4. `control` Router
+#### 4.2.4. `control` Router
 
 Serves the same purpose as shell, but separated into another channel so that
 critical messages are not queued being long running execution requests being
@@ -125,12 +149,12 @@ The critical messages are:
   the 'kernel spec'
 
 
-#### 6.1.5. `heartbeat` Rep
+#### 4.2.5. `heartbeat` Rep
 
 Kernel muse echo back immediately when receiving a message on this channel.
 Typically the message received will be a single frame containing `b"ping"`.
 
-### Identities
+### 4.3. Identities
 
 The first frame(s) of a ZMQMessage before the delimiter `b"<IDS|MSG>"` are
 called Identities. They are used by ZMQ for message routing. They must be cloned
@@ -145,7 +169,7 @@ For the `iopub` socket this is just a single frame containing the message
 > clients just subscribe to all topics, so the specific value may not be
 > important.
 
-## 7. Other Notes and Shell Snippets
+## 5. Other Notes and Shell Snippets
 
 ```bash
 jupyter kernelspec list
