@@ -15,62 +15,42 @@ use super::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(untagged)]
-pub enum MessageContent {
-    KernelInfoReply(KernelInfoReply),
-    HistoryRequest(HistoryRequest),
-    
-    ExecuteRequest(ExecuteRequest),
-    ExecuteReply(ExecuteReply),
-    ExecuteInputPublication(ExecuteInputPublication),
-    ExecuteResultPublication(ExecuteResultPublication),
-    StatusPublication(StatusPublication),
-    StreamPublication(StreamPublication),
+macro_rules! define_message_content_and_impl_from {
+    ($($type:tt),*) => {
+        #[derive(Debug, Serialize, Deserialize, PartialEq)]
+        #[serde(untagged)]
+        pub enum MessageContent {
+            $(
+                $type($type),
+            )*
+        }
 
-    // TODO: due to the serde untagged the order of variants matters :( These must come below
-    //       execution requests for now:
-    IsCompleteRequest(IsCompleteRequest),
-    IsCompleteReply(IsCompleteReply),
-
-    CommOpen(CommOpen),
-    CommClose(CommClose),
-    CommMsg(CommMsg),
-}
-
-macro_rules! impl_from_message_content {
-    // The macro will accept a series of pairs (VariantType, VariantName).
-    ($($variant_type:ty => $variant_name:ident),+) => {
         $(
-            impl From<$variant_type> for MessageContent {
-                fn from(item: $variant_type) -> Self {
-                    MessageContent::$variant_name(item)
+            impl From<$type> for MessageContent {
+                fn from(item: $type) -> Self {
+                    MessageContent::$type(item)
                 }
             }
-        )+
-    };
+        )*
+    }
 }
+define_message_content_and_impl_from!(
+    KernelInfoReply,
+    HistoryRequest,
+    ExecuteRequest,
+    ExecuteReply,
+    ExecuteInputPublication,
+    ExecuteResultPublication,
+    StatusPublication,
+    StreamPublication,
+    IsCompleteRequest,
+    IsCompleteReply,
+    CommOpen,
+    CommClose,
+    CommMsg
+);
 
-// Use the macro for each variant of the MessageContent enum.
-impl_from_message_content! {
-    KernelInfoReply => KernelInfoReply,
-    StatusPublication => StatusPublication,
-    
-    HistoryRequest => HistoryRequest,
-    
-    ExecuteReply => ExecuteReply,
-    ExecuteRequest => ExecuteRequest,
-    ExecuteResultPublication => ExecuteResultPublication,
-    ExecuteInputPublication => ExecuteInputPublication,
-    StreamPublication => StreamPublication,
 
-    IsCompleteRequest => IsCompleteRequest,
-    IsCompleteReply => IsCompleteReply,
-
-    CommOpen => CommOpen,
-    CommClose => CommClose,
-    CommMsg => CommMsg
-}
 
 #[cfg(test)]
 mod tests {
