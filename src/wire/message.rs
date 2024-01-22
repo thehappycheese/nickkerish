@@ -1,6 +1,3 @@
-use std::vec;
-
-use super::header;
 use super::{
     HmacSha256,
     Header,
@@ -16,8 +13,17 @@ use bytes::Bytes;
 use hmac::Mac;
 use zeromq::ZmqMessage;
 
-
-fn compute_signature(key:&str, header: &Bytes, parent_header: &Bytes, metadata: &Bytes, content: &Bytes, extra_buffers:&Vec<Bytes>) -> Result<Bytes> {
+/// Compute the signature for the message
+/// 
+/// TODO: The 
+fn compute_signature(
+    key           : &str, 
+    header        : &Bytes, 
+    parent_header : &Bytes, 
+    metadata      : &Bytes, 
+    content       : &Bytes, 
+    extra_buffers : &Vec<Bytes>
+) -> Result<Bytes> {
     let mut mac = HmacSha256::new_from_slice(key.as_bytes())?;
     mac.update(header);
     mac.update(parent_header);
@@ -29,7 +35,6 @@ fn compute_signature(key:&str, header: &Bytes, parent_header: &Bytes, metadata: 
     let mac:Vec<u8> = mac.finalize().into_bytes().to_vec();
     Ok(mac.into())
 }
-
 
 #[derive(Debug)]
 pub struct MessageBytes {
@@ -50,6 +55,9 @@ pub struct MessageBytes {
     /// - The serialized parent header dict
     /// - The serialized metadata dict
     /// - The serialized content dict
+    /// 
+    /// If authentication is disabled, then signature is expected to be an empty string.
+    /// (See [ConnectionInformation](crate::connection::ConnectionInformation::key))
     signature: Bytes,
 
     /// the header for this message
@@ -62,11 +70,15 @@ pub struct MessageBytes {
 }
 
 impl MessageBytes{
-    fn compute_signature(&self, key: &str) -> Result<Bytes> {
-        compute_signature(key, &self.header, &self.parent_header, &self.metadata, &self.content, &self.extra_buffers)
-    }
     fn validate_signature(&self, key: &str) -> Result<()> {
-        let signature = self.compute_signature(key)?;
+        let signature = compute_signature(
+            &key,
+            &self.header,
+            &self.parent_header,
+            &self.metadata,
+            &self.content,
+            &self.extra_buffers,
+        )?;
         let signature = hex::encode(signature);
         if signature == self.signature {
             Ok(())
@@ -152,7 +164,7 @@ pub struct MessageParsed {
     /// the header for this message
     pub header: EmptyObjectOr<Header>,
 
-    /// A copy of the header form the message that 'caused' this message
+    /// A copy of the header from the message that 'caused' this message
     pub parent_header: EmptyObjectOr<Header>,
 
     /// Any valid JSON inside an object, or an empty object {}
@@ -246,44 +258,3 @@ impl MessageParsed {
     }
     
 }
-
-
-// #[cfg(test)]
-// mod tests {
-//     use zeromq::ZmqMessage;
-//     use crate::wire::KernelInfoReply;
-//     use super::*;
-
-//     #[test]
-//     fn default_kernel_info_reply() {
-//         let content = KernelInfoReply::default();
-//         let message = MessageParsed {
-//             content: MessageContent::KernelInfoReply(content).into(),
-//             ..Default::default()
-//         };
-//         let message: ZmqMessage = message.to_zmq_message("test_dummy_key").unwrap();
-//         println!("Default kernel reply message: {:?}", message);
-//     }
-//     #[test]
-//     fn default_display_message() {
-//         let content = KernelInfoReply::default();
-//         let message = MessageParsed {
-//             content: MessageContent::KernelInfoReply(content).into(),
-//             ..Default::default()
-//         };
-//         println!("{message}");
-//     }
-
-//     #[test]
-//     fn test_signature_computation() {
-//         let content = KernelInfoReply::default();
-//         let message = MessageParsed {
-//             content: MessageContent::KernelInfoReply(content).into(),
-//             ..Default::default()
-//         };
-//         println!("{message}");
-//         let signature = message.compute_signature("test_dummy_key").unwrap();
-//         println!("{signature}");
-//     }
-    
-// }

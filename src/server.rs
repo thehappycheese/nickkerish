@@ -4,20 +4,22 @@ use crate::{
     connection::ConnectionInformation,
     wire::{
         KERNEL_MESSAGING_VERSION,
-
         MessageBytes,
         MessageParsed,
-        Header,
-            MessageType,
         MessageContent,
-            ExecutionState,
-
+        Header,
+        MessageType,
+        ExecutionState,
         KernelInfoReply,
         StatusPublication,
         IsCompleteReply,
         IsCompleteReplyStatus,
         ExecuteReply,
-        ExecuteResultPublication, CommClose, CommOpen, ExecuteInputPublication, StreamPublication,
+        ExecuteResultPublication,
+        CommClose,
+        CommOpen,
+        ExecuteInputPublication,
+        StreamPublication,
     },
     util::{iso_8601_Z_now, zmq_message_pretty_print, EmptyObjectOr},
 };
@@ -36,7 +38,9 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
     
     // Define global constants
     let kernel_session_id: String = Uuid::new_v4().into();
-    let kernel_username: String = "kernel".to_string(); // TODO: the spec isn't clear if the kernel replies should actually contain this field or not, or what the value should be when responding
+    // TODO: the spec isn't clear if the kernel replies should actually contain the "username" field
+    //       or not, and if so, what the value should be when responding?
+    let kernel_username: String = "kernel".to_string(); 
 
     let mut shell_socket: zeromq::RouterSocket =
         connection_information.create_socket_shell().await?;
@@ -107,9 +111,15 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
         
         // TODO: Incoming messages should always have a header
         //       So should outgoing messages... when does a message not have a header?
+        //       therefore maybe 
         // TODO: this nesting sucks
         if let EmptyObjectOr::Object(message_header) = &message_received.header {
 
+            // TODO: here we are matching on the message header type, not on the actual message
+            //       content. this is dumb because 1) an error in our implementation, or the client
+            //       may lead to a mismatch between header message type and actual content type
+            //       2) it makes it tedious extract the message content in each of the match arms
+            //       below
             match message_header.message_type {
                 MessageType::KernelInfoRequest=>{
                     let response = message_received.reply(
@@ -218,7 +228,8 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                     println_debug!("HistoryRequest received... TODO: Respond");
                 },
                 MessageType::CommOpen=>{
-                    // we don't do comms, shut it down instantly
+                    // We don't support comm messages (yet), so respond immediately with a CommClose
+                    // as per https://jupyter-client.readthedocs.io/en/latest/messaging.html#opening-a-comm
                     if let EmptyObjectOr::Object(MessageContent::CommOpen(comm_open)) = &message_received.content {
                         let content = MessageContent::CommClose(CommClose{
                             comm_id:comm_open.comm_id.clone(),
@@ -294,7 +305,7 @@ async fn publish_kernel_status(
 ) -> Result<()> {
     let message = MessageParsed {
         key:key.into(),
-        identities: Vec::new(),//vec![Bytes::from("kernel_status")], // TODO: is topic needed? excvr doesn't use one
+        identities: Vec::new(),//vec![Bytes::from("kernel_status")], // TODO: is topic needed? evcxr uses a blank array
         content: MessageContent::from(StatusPublication {
             execution_state: status,
         })

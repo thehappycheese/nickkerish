@@ -6,19 +6,35 @@ use std::{
 use serde::Serialize;
 use anyhow::{Context, Result};
 
+/// The way in which the client should try to to interrupt cell execution on this kernel,
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all="snake_case")]
 enum InterruptMode{
+    /// Use the operating system’s signalling facilities (e.g. SIGINT on POSIX systems)
     #[default]
     Signal,
+    /// Send an interrupt_request message on the control channel (see Kernel interrupt).
     Message
 }
 
 #[derive(Debug, Serialize)]
 struct KernelSpec{
-    argv: Vec<String>,
+    /// A list of command line arguments used to start the kernel. The text {connection_file} in any
+    /// argument will be replaced with the path to the connection file.
+    #[serde(rename="argv")]
+    shell_kernel_run_command: Vec<String>,
+
+    /// User visible name of the kernel "Rust", "Python"
     display_name: String,
+
+    /// Generally a lower case version of the language name "rust" or "python"
     language: String,
+
+    /// The way in which the client should try to to interrupt cell execution on this kernel,
+    /// - `"signal"` (default) the operating system’s signalling facilities (e.g. SIGINT on POSIX
+    ///   systems)
+    /// - `"message"` sending an interrupt_request message on the control channel (see Kernel
+    ///   interrupt).
     #[serde(skip_serializing_if = "Option::is_none")]
     interrupt_mode: Option<InterruptMode>
 }
@@ -31,6 +47,9 @@ struct KernelSpec{
 /// 
 /// TODO: Add better error explaining to the user what to do if the `jupyter kernelspec` command fails
 /// TODO: Add flag to make the `--user` flag optional
+/// 
+/// TODO: We can try manually install this according to the standard paths specified here
+///       https://jupyter-client.readthedocs.io/en/latest/kernels.html#kernel-specs
 pub fn kernel_spec() -> Result<()> {
     let current_executable_path = std::env::current_exe()
         .context("Failed to get current executable path")?;
@@ -39,7 +58,7 @@ pub fn kernel_spec() -> Result<()> {
 
     // Define the content of kernel.json
     let kernel_spec = KernelSpec {
-        argv: vec![
+        shell_kernel_run_command: vec![
                 format!("{current_executable_path_str}"),
                 "run".to_owned(),
                 "--connection-file".to_owned(),
@@ -47,7 +66,10 @@ pub fn kernel_spec() -> Result<()> {
             ],
         display_name: "Nickkerish".to_owned(),
         language: "nickkerish".to_owned(),
-        interrupt_mode: None // Default is signal
+
+        // Lets try message, since vscode just flat out does not seem to play nice and I am just
+        // trying random stuff now
+        interrupt_mode: Some(InterruptMode::Message)
     };
 
     let kernel_folder = PathBuf::from("Nickkerish");

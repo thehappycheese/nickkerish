@@ -8,7 +8,8 @@ use tracing::Level;
 ///
 /// Logs are located based on the location of running exe so that we catch them nicely even if it
 /// was vscode or jupyter started the exe.
-/// TODO: Use a better mechanism to locate the logs
+/// 
+/// TODO: Use a better mechanism to set the output location of logs
 ///
 pub fn setup() -> Result<tracing_appender::non_blocking::WorkerGuard> {
     let mut current_executable_path = std::env::current_exe()

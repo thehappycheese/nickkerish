@@ -4,18 +4,16 @@ use serde::{Deserialize, Serialize};
 /// Similar to the `Option` type, but the `None` variant is serialized/deserialized by `serde_json`
 /// to / from an empty object `{}`.
 ///
-/// Introduces the constraint `#[serde(deny_unknown_fields)]` which means that for the `Object(T)`
-/// type `T` cannot be used for json objects which may contain unknown fields.
+/// Note that although `EmptyObjectOr<T>` adds the constraint `#[serde(deny_unknown_fields)]`, the
+/// inner object `T` is not bound by this and may independently specify this this constraint if
+/// needed. The behavior is important for compatibility with the jupyter messaging specification
+/// which requires that for [MessageContent](crate::wire::MessageContent) objects "Both sides should
+/// allow extra fields in known message types" See (
+/// [Compatibility](https://jupyter-client.readthedocs.io/en/latest/messaging.html#compatibility))
 ///
-/// TODO: This is a problem for compatibility
-/// https://jupyter-client.readthedocs.io/en/latest/messaging.html#compatibility
-///
-/// > I tried very hard to make a custom serializer/deserializer for serde that allows serde_json to
-/// > convert a generic `Option<T>`'s `None` variant to and from `{}` but it turns out not to be
-/// > possible for the generic case. For one thing it seems impossible to check the number of keys
-/// > in a map before serializing it, and even if you could you might end up having to write a
-/// > custom serializer/deserializer for each type `T`.
-///
+/// > NOTE: I tried very hard to make a custom serializer/deserializer for serde that allows serde_json to
+/// > encode/decode a generic `Option<T>::None` variant to and from `{}`
+/// > but it turns out to be unexpectedly difficult
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
@@ -122,5 +120,27 @@ mod tests {
             json,
             r#"{"msg_id":"a","msg_type":"comm_msg","username":"b","session":"c","date":"d","version":"e"}"#
         );
+    }
+
+
+    /// https://jupyter-client.readthedocs.io/en/latest/messaging.html#compatibility
+    /// "Both sides should allow unexpected message types, and extra fields in known message types,
+    /// so that additions to the protocol do not break existing code."
+    /// 
+    /// This test shows that although EmptyObjectOr<T> is marked with #[serde(deny_unknown_fields)],
+    /// the inner object T can be used for json objects which may contain unknown fields.
+    #[test]
+    fn test_if_inner_object_can_tolerate_additional_fields(){
+
+        #[derive(Serialize, Deserialize, Debug)]
+        struct Dummy {
+            a: u32,
+            // b: u32,
+        }
+
+        let input_data = r#"{"a":10,"b":20}"#;
+        let dummy: EmptyObjectOr<Dummy> = serde_json::from_str(input_data).unwrap();
+        let dummy_inner = dummy.unwrap();
+        assert_eq!(dummy_inner.a, 10);
     }
 }

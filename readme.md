@@ -7,6 +7,8 @@ A dummy Jupyter Kernel implemented in Rust using ZeroMQ
   - [2.1. Copy pasted Doc-strings](#21-copy-pasted-doc-strings)
   - [2.2. Excvr](#22-excvr)
 - [3. Usage](#3-usage)
+  - [Show CLI Help](#show-cli-help)
+  - [Install the kernelspec](#install-the-kernelspec)
 - [4. Nicks Docs Notes](#4-nicks-docs-notes)
   - [4.1. Key Documentation Pages](#41-key-documentation-pages)
   - [4.2. Sockets](#42-sockets)
@@ -47,11 +49,15 @@ still a much better implementation than what I came up with here.
 
 ## 3. Usage
 
+### Show CLI Help
 Build and run using cargo
 
 ```shell
 cargo run -- help
 ```
+
+
+### Install the kernelspec
 
 Install the kernelspec so that jupyter can find the kernel executable.
 Running it via cargo means you are pointing the kernelspec at the development build; the exe
@@ -62,7 +68,7 @@ cargo run -- install-kernel-spec
 ```
 
 Run the kernel (normally you would not do this manually, this is called by your jupyter front-end
-such as vscode or jupyter labs etc)
+such as vscode or jupyter labs etc):
 
 ```shell
 nickkerish.exe --connection-file "path/to/connection/file.json"
