@@ -10,6 +10,7 @@ use crate::util::TryToJsonBytesString;
 
 use anyhow::Result;
 use bytes::Bytes;
+use clio::Input;
 use hmac::Mac;
 use zeromq::ZmqMessage;
 
@@ -36,7 +37,7 @@ fn compute_signature(
     Ok(mac.into())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MessageBytes {
     /// When this message is to be a response to a received message, then just copy the identities
     /// from the received message. For iopub messages this is just a single value
@@ -185,13 +186,17 @@ impl std::fmt::Display for MessageParsed {
             //"[Message]{{\n\tidentities: [{:}],\n\tsignature: {:}\n\theader: {:}\n\tparent_header: {:}\n\tmetadata: {:}\n\tcontent: {:}\n\textra_buffers: [{:}]}}",
             "[Message]{{\n\tidentities: [{:}],\n\theader: {:}\n\tparent_header: {:}\n\tmetadata: {:}\n\tcontent: {:}\n\textra_buffers: [{:}]}}",
             self.identities.len(),
-            serde_json::to_string(&self.header).unwrap(),
-            serde_json::to_string(&self.parent_header).unwrap(),
+            format_json_object_string(serde_json::to_string(&self.header).unwrap()),
+            format_json_object_string(serde_json::to_string(&self.parent_header).unwrap()),
             serde_json::to_string(&self.metadata).unwrap(),
-            serde_json::to_string(&self.content).unwrap(),
+            format_json_object_string(serde_json::to_string(&self.content).unwrap()),
             self.extra_buffers.len()
         )
     }
+}
+
+fn format_json_object_string(inp:String) -> String {
+    inp.replace("{", "{\n        ").replace(",", ",\n        ")
 }
 
 impl MessageParsed {

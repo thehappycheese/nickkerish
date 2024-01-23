@@ -138,7 +138,9 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                     println_debug!("Sending KernelInfoReply {response:}");
                     //let response = response.to_zmq_message(&connection_information.key)?;
                     //println_debug!("Sending KernelInfoReply {response:?}");
-                    shell_socket.send(response.encode()?.into()).await?;
+                    let response = response.encode()?;
+                    shell_socket.send(response.clone().into()).await?;
+                    iopub_socket.send(response.clone().into()).await?;
                 },
                 MessageType::ExecuteRequest=>{
                     let mut code_to_execute = None;
@@ -275,7 +277,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
         publish_kernel_status(
             &mut iopub_socket,
             &kernel_session_id,
-            message_received.parent_header.clone(),
+            message_received.header.clone(),
             &connection_information.key,
             &kernel_username,
             ExecutionState::Idle,
@@ -319,7 +321,7 @@ async fn publish_kernel_status(
             version: KERNEL_MESSAGING_VERSION.into(),
         }
         .into(),
-        parent_header:parent_header.clone(),
+        parent_header:parent_header,
         metadata: Default::default(),
         extra_buffers:Default::default(),
     };

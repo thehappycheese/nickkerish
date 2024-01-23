@@ -5,11 +5,11 @@ A dummy Jupyter Kernel implemented in Rust using ZeroMQ
 - [1. Introduction](#1-introduction)
 - [2. Acknowledgements](#2-acknowledgements)
   - [2.1. Copy pasted Doc-strings](#21-copy-pasted-doc-strings)
-  - [2.2. Excvr](#22-excvr)
+  - [2.2. Evcxr](#22-evcxr)
 - [3. Usage](#3-usage)
-  - [Show CLI Help](#show-cli-help)
-  - [Install the kernelspec](#install-the-kernelspec)
-- [4. Nicks Docs Notes](#4-nicks-docs-notes)
+  - [3.1. Show CLI Help](#31-show-cli-help)
+  - [3.2. Install the kernelspec](#32-install-the-kernelspec)
+- [4. Nick's Notes](#4-nicks-notes)
   - [4.1. Key Documentation Pages](#41-key-documentation-pages)
   - [4.2. Sockets](#42-sockets)
     - [4.2.1. `shell` Router](#421-shell-router)
@@ -18,6 +18,10 @@ A dummy Jupyter Kernel implemented in Rust using ZeroMQ
     - [4.2.4. `control` Router](#424-control-router)
     - [4.2.5. `heartbeat` Rep](#425-heartbeat-rep)
   - [4.3. Identities](#43-identities)
+  - [4.4. The Screwy Behavior of Various Clients](#44-the-screwy-behavior-of-various-clients)
+    - [4.4.1. VS Code](#441-vs-code)
+  - [4.5. The Screwy Behavior of Various Kernels](#45-the-screwy-behavior-of-various-kernels)
+    - [4.5.1. Evcxr](#451-evcxr)
 - [5. Other Notes and Shell Snippets](#5-other-notes-and-shell-snippets)
 
 ## 1. Introduction
@@ -41,7 +45,7 @@ page which is under a
 [BSD 3-Clause "New" or "Revised" License](https://github.com/jupyter/jupyter_client/blob/396e665af9088f4f083c02c12ea1fb4e9b3dff91/LICENSE).
 My thanks to the original authors.
 
-### 2.2. Excvr
+### 2.2. Evcxr
 
 Although this crate is my own special kind of mess, I got started by reading
 from the [evcxr](https://github.com/evcxr/evcxr) project. Currently this is
@@ -49,51 +53,49 @@ still a much better implementation than what I came up with here.
 
 ## 3. Usage
 
-### Show CLI Help
+### 3.1. Show CLI Help
+
 Build and run using cargo
 
 ```shell
 cargo run -- help
 ```
 
+### 3.2. Install the kernelspec
 
-### Install the kernelspec
-
-Install the kernelspec so that jupyter can find the kernel executable.
-Running it via cargo means you are pointing the kernelspec at the development build; the exe
-somewhere in the target directory:
+Install the kernelspec so that jupyter can find the kernel executable. Running
+it via cargo means you are pointing the kernelspec at the development build; the
+exe somewhere in the target directory:
 
 ```shell
 cargo run -- install-kernel-spec
 ```
 
-Run the kernel (normally you would not do this manually, this is called by your jupyter front-end
-such as vscode or jupyter labs etc):
+Run the kernel (normally you would not do this manually, this is called by your
+jupyter front-end such as vscode or jupyter labs etc):
 
 ```shell
 nickkerish.exe --connection-file "path/to/connection/file.json"
 ```
 
-## 4. Nicks Docs Notes
+## 4. Nick's Notes
 
 ### 4.1. Key Documentation Pages
 
--
-  [Handling messages](https://jupyter-client.readthedocs.io/en/latest/kernels.html#handling-messages)
-  4. overview of endpoint functions
--
-  [Kernel Specs](https://jupyter-client.readthedocs.io/en/latest/kernels.html#kernel-specs)
+- [Handling messages](https://jupyter-client.readthedocs.io/en/latest/kernels.html#handling-messages)
+  overview of endpoint functions
+- [Kernel Specs](https://jupyter-client.readthedocs.io/en/latest/kernels.html#kernel-specs)
   A json kernel descriptor file; Jupyter can be made aware of your new kernel
-  5. using the ```jupyter kernelspec install``` command.
--
-  [Connection Files](https://jupyter-client.readthedocs.io/en/latest/kernels.html#connection-files)
-  are provided via the command line be jupyter clients at startup to provide
-  port numbers and ip addresses that the kernel is expected to create sockets
-  6. on, and the key to be used for message verification.
--
-  [Compatibility](https://jupyter-client.readthedocs.io/en/latest/messaging.html#compatibility)
-  describes the minimum features required to produce a working kernel (very
-  important for my lazy fingers 😊)
+  using the ```jupyter kernelspec install``` command.
+- [Connection Files](https://jupyter-client.readthedocs.io/en/latest/kernels.html#connection-files)
+  are provided via the command line be jupyter clients at startup to provide port numbers and ip
+  addresses that the kernel is expected to create sockets on, and the key to be used for message
+  verification.
+  - Note: clients kinda ignore the language specified in this anyway, and its all redundant because
+    the `kernel_info_response` message has better more complete information anyway!
+- [Compatibility](https://jupyter-client.readthedocs.io/en/latest/messaging.html#compatibility)
+  describes the minimum features required to produce a working kernel (very important for my lazy
+  fingers 😊)
 
 ### 4.2. Sockets
 
@@ -154,7 +156,6 @@ The critical messages are:
   these are only used if the kernel specified `"interrupt_mode":"message"` in
   the 'kernel spec'
 
-
 #### 4.2.5. `heartbeat` Rep
 
 Kernel muse echo back immediately when receiving a message on this channel.
@@ -174,6 +175,29 @@ For the `iopub` socket this is just a single frame containing the message
 > `b"kernel.{u-u-i-d}.execute_result"` or `b"stream.stdout"` etc. Generally
 > clients just subscribe to all topics, so the specific value may not be
 > important.
+
+### 4.4. The Screwy Behavior of Various Clients
+
+#### 4.4.1. VS Code
+
+- Does not accept unknown languages.
+  - It will repeatedly send `kernel_info_request` messages if it cannot find a
+    matching supported language.
+  - So far the only way i have found to make it behave is to lie and tell it
+    that I am a python kernel.
+- Injects invisible code
+  - Did you know that VS Code does a bunch of imports into your python while the
+    kernel is starting?
+  - Smells like telemetry... I mean, we know it is riddled with telemetry
+    anyway.
+  - Appears to be fairly harmless... looks like it injects some environment
+    variables and captures the version of ipywidgets.
+
+### 4.5. The Screwy Behavior of Various Kernels
+
+#### 4.5.1. Evcxr
+
+- starts by broadcasting `kernel_status` of `"busy"` instead of `"starting"`
 
 ## 5. Other Notes and Shell Snippets
 
