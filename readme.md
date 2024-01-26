@@ -20,6 +20,7 @@ A dummy Jupyter Kernel implemented in Rust using ZeroMQ
   - [4.3. Identities](#43-identities)
   - [4.4. The Screwy Behavior of Various Clients](#44-the-screwy-behavior-of-various-clients)
     - [4.4.1. VS Code](#441-vs-code)
+    - [4.4.2. Jupyter Lab](#442-jupyter-lab)
   - [4.5. The Screwy Behavior of Various Kernels](#45-the-screwy-behavior-of-various-kernels)
     - [4.5.1. Evcxr](#451-evcxr)
 - [5. Other Notes and Shell Snippets](#5-other-notes-and-shell-snippets)
@@ -192,6 +193,11 @@ For the `iopub` socket this is just a single frame containing the message
     anyway.
   - Appears to be fairly harmless... looks like it injects some environment
     variables and captures the version of ipywidgets.
+
+#### 4.4.2. Jupyter Lab
+
+- Repeatedly requests `kernel_info_request` even if it promptly receives a valid result
+  - Might be some kind of pre-flight / initialization process
 
 ### 4.5. The Screwy Behavior of Various Kernels
 
