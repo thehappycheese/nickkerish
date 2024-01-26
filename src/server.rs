@@ -21,8 +21,14 @@ use crate::{
         ExecuteInputPublication,
         StreamPublication,
     },
-    util::{iso_8601_Z_now, zmq_message_pretty_print, EmptyObjectOr},
+    execute::run_wrapped,
+    util::{
+        iso_8601_z_now,
+        zmq_message_pretty_print,
+        EmptyObjectOr
+    },
 };
+
 
 use anyhow::Result;
 use bytes::Bytes;
@@ -126,7 +132,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                         Header {
                             message_id: Uuid::new_v4().into(),
                             message_type: MessageType::KernelInfoReply,
-                            date: iso_8601_Z_now(),
+                            date: iso_8601_z_now(),
                             session: kernel_session_id.clone().into(),
                             username: kernel_username.clone().into(),
                             version: KERNEL_MESSAGING_VERSION.into(),
@@ -155,11 +161,17 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                         }
                     };
                     println_debug!("Tried to execute {code_to_execute:?}");
+                    // ============================= RUN ===============================
+                    
+                    let result = run_wrapped(&code_to_execute);
+
+                    // ============================= /RUN ===============================
+
                     let response = message_received.reply(
                         Header{
                             message_id: Uuid::new_v4().into(),
                             message_type: MessageType::ExecuteInput,
-                            date: iso_8601_Z_now(),
+                            date: iso_8601_z_now(),
                             session: kernel_session_id.clone().into(),
                             username: kernel_username.clone().into(),
                             version: KERNEL_MESSAGING_VERSION.into(),
@@ -180,13 +192,13 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                         message_received.header.clone(),
                         &connection_information.key,
                         &kernel_username,
-                        &format!("You tried to execute `{code_to_execute:?}`, but Nickkerish is a dummy kernel, and does not do what you want!")
+                        &result
                     ).await?;
                     let response = message_received.reply(
                         Header {
                             message_id: Uuid::new_v4().into(),
                             message_type: MessageType::ExecuteReply,
-                            date: iso_8601_Z_now(),
+                            date: iso_8601_z_now(),
                             session: kernel_session_id.clone().into(),
                             username: kernel_username.clone().into(),
                             version: KERNEL_MESSAGING_VERSION.into(),
@@ -203,14 +215,13 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                     );
                     println_debug!("Sending ExecuteReply {response:}");
                     shell_socket.send(response.encode()?.into()).await?;
-                    
                 },
                 MessageType::IsCompleteRequest=>{
                     let response = message_received.reply(
                         Header {
                             message_id: Uuid::new_v4().into(),
                             message_type: MessageType::IsCompleteRequest,
-                            date: iso_8601_Z_now(),
+                            date: iso_8601_z_now(),
                             session: kernel_session_id.clone().into(),
                             username: kernel_username.clone().into(),
                             version: KERNEL_MESSAGING_VERSION.into(),
@@ -243,7 +254,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                                 message_type: MessageType::CommClose,
                                 username: kernel_username.clone().into(),
                                 session: kernel_session_id.clone().into(),
-                                date: iso_8601_Z_now(),
+                                date: iso_8601_z_now(),
                                 version: KERNEL_MESSAGING_VERSION.into(),
                             },
                             content,
@@ -315,7 +326,7 @@ async fn publish_kernel_status(
         header: Header {
             message_id: Uuid::new_v4().into(),
             message_type: MessageType::Status,
-            date: iso_8601_Z_now(),
+            date: iso_8601_z_now(),
             session: kernel_session_id.into(),
             username: username.into(),
             version: KERNEL_MESSAGING_VERSION.into(),
@@ -338,26 +349,26 @@ async fn publish_execution_result(
     username: &str,
     execution_result:&str
 )-> Result<()>{
-    let message = MessageParsed{
-        key:key.into(),
-        identities: vec![Bytes::from("stream")], // topic
-        content: MessageContent::from(StreamPublication {
-            name: "stdout".into(),
-            text: execution_result.into(),
-        }).into(),
-        header: Header {
-            message_id: Uuid::new_v4().into(),
-            message_type: MessageType::Stream,
-            date: iso_8601_Z_now(),
-            session: kernel_session_id.into(),
-            username: username.into(),
-            version: KERNEL_MESSAGING_VERSION.into(),
-        }.into(),
-        parent_header:parent_header.clone(),
-        ..Default::default()
-    };
-    println_debug!("Publishing Stream: {message}");
-    iopub_socket.send(message.encode()?.into()).await?;
+    // let message = MessageParsed{
+    //     key:key.into(),
+    //     identities: vec![Bytes::from("stream")], // topic
+    //     content: MessageContent::from(StreamPublication {
+    //         name: "stdout".into(),
+    //         text: execution_result.into(),
+    //     }).into(),
+    //     header: Header {
+    //         message_id: Uuid::new_v4().into(),
+    //         message_type: MessageType::Stream,
+    //         date: iso_8601_z_now(),
+    //         session: kernel_session_id.into(),
+    //         username: username.into(),
+    //         version: KERNEL_MESSAGING_VERSION.into(),
+    //     }.into(),
+    //     parent_header:parent_header.clone(),
+    //     ..Default::default()
+    // };
+    // println_debug!("Publishing Stream: {message}");
+    // iopub_socket.send(message.encode()?.into()).await?;
 
     let message = MessageParsed {
         key:key.into(),
@@ -371,7 +382,7 @@ async fn publish_execution_result(
         header: Header {
             message_id: Uuid::new_v4().into(),
             message_type: MessageType::ExecuteResult,
-            date: iso_8601_Z_now(),
+            date: iso_8601_z_now(),
             session: kernel_session_id.into(),
             username: username.into(),
             version: KERNEL_MESSAGING_VERSION.into(),

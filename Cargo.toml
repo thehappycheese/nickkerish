@@ -2,7 +2,7 @@
 name = "nikkerish"
 version = "0.1.0"
 edition = "2021"
-description = "A Jupyter Kernel implemented directly in Rust for a non existent dummy language named Nickkerish"
+description = "A Jupyter Kernel implemented directly in Rust, experimentally wrapping the Uiua Language"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -23,3 +23,4 @@ tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 tracing-appender = "0.2.3"
 uuid = { version = "1.6.1", features = ["v4", "serde"] }
+uiua = {version = "0.7.1"}

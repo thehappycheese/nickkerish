@@ -64,15 +64,15 @@ pub fn kernel_spec() -> Result<()> {
                 "--connection-file".to_owned(),
                 "{connection_file}".to_owned(),
             ],
-        display_name: "Nickkerish".to_owned(),
-        language: "nickkerish".to_owned(),
+        display_name: "NickkerishUiua".to_owned(),
+        language: "uiua".to_owned(),
 
         // Lets try message, since vscode just flat out does not seem to play nice and I am just
         // trying random stuff now
         interrupt_mode: Some(InterruptMode::Message)
     };
 
-    let kernel_folder = PathBuf::from("Nickkerish");
+    let kernel_folder = PathBuf::from("NickkerishUiua");
     fs::create_dir_all(&kernel_folder)
         .context("Failed to create kernel folder")?;
 

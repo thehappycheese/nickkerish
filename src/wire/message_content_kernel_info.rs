@@ -48,10 +48,10 @@ pub struct LanguageInfo {
 impl Default for LanguageInfo {
     fn default() -> Self {
         Self {
-            name               : "python".to_owned(),
-            version            : "3.11.0".to_owned(),
-            mimetype           : "text/x-python".to_owned(),
-            file_extension     : ".py".to_owned(),
+            name               : "uiua".to_owned(),
+            version            : "v0.1.0".to_owned(),
+            mimetype           : "text/x-uiua".to_owned(),
+            file_extension     : ".ua".to_owned(),
             pygments_lexer     : Default::default(),
             codemirror_mode    : Default::default(),
             nbconvert_exporter : Default::default(),

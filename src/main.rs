@@ -10,6 +10,7 @@ mod server;
 mod util;
 mod wire;
 
+mod execute;
 
 use command_line_interface::CommandLineInterface;
 use server::serve;
