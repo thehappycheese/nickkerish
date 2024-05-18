@@ -1,8 +1,6 @@
-use std::{collections::HashMap, default};
-
 use crate::{
-    connection::ConnectionInformation,
-    wire::{
+    connection_information::ConnectionInformation,
+    protocol::{
         KERNEL_MESSAGING_VERSION,
         MessageBytes,
         MessageParsed,
@@ -17,9 +15,9 @@ use crate::{
         ExecuteReply,
         ExecuteResultPublication,
         CommClose,
-        CommOpen,
         ExecuteInputPublication,
         StreamPublication,
+        ExecuteReplyStatus,
     },
     util::{iso_8601_Z_now, zmq_message_pretty_print, EmptyObjectOr},
 };
@@ -192,7 +190,7 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                             version: KERNEL_MESSAGING_VERSION.into(),
                         },
                         MessageContent::from(ExecuteReply {
-                            status: crate::wire::ExecuteReplyStatus::Ok,
+                            status: ExecuteReplyStatus::Ok,
                             execution_count: 1,
                             payload: None,
                             user_expressions: None,
@@ -265,13 +263,13 @@ pub async fn serve(connection_information: ConnectionInformation) -> Result<()> 
                 },
                 // TODO: it is a bit dumb to have incoming and outgoing message types together maybe?
                 //MessageType::IsCompleteReply=>unreachable!("This is an outgoing only message type"),
-                MessageType::ExecuteInput=>unreachable!("This is an outgoing only message type"),
-                MessageType::Stream=>unreachable!("This is an outgoing only message type"),
-                MessageType::ExecuteResult=>unreachable!("This is an outgoing only message type"),
-                MessageType::IsCompleteReply=>unreachable!("This is an outgoing only message type"),
-                MessageType::KernelInfoReply=>unreachable!("This is an outgoing only message type"),
-                MessageType::ExecuteReply =>unreachable!("This is an outgoing only message type"),
-                MessageType::Status=>unreachable!("This is an outgoing only message type"),
+                MessageType::ExecuteInput    => unreachable!("This is an outgoing only message type"),
+                MessageType::Stream          => unreachable!("This is an outgoing only message type"),
+                MessageType::ExecuteResult   => unreachable!("This is an outgoing only message type"),
+                MessageType::IsCompleteReply => unreachable!("This is an outgoing only message type"),
+                MessageType::KernelInfoReply => unreachable!("This is an outgoing only message type"),
+                MessageType::ExecuteReply    => unreachable!("This is an outgoing only message type"),
+                MessageType::Status          => unreachable!("This is an outgoing only message type"),
             }
         }
         publish_kernel_status(

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+
 /// Similar to the `Option` type, but the `None` variant is serialized/deserialized by `serde_json`
 /// to / from an empty object `{}`.
 ///
@@ -80,7 +81,13 @@ impl<T> EmptyObjectOr<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{wire::Header, util::TryToJsonBytesString};
+    use crate::{
+        protocol::{
+            Header,
+            MessageType,
+        },
+        util::TryToJsonBytesString
+    };
 
     #[test]
     fn test_serialize_empty_object_or() {
@@ -89,7 +96,7 @@ mod tests {
         assert_eq!(json, "{}");
         let object_or = EmptyObjectOr::Object(Header {
             message_id: "a".into(),
-            message_type: crate::wire::MessageType::CommMsg,
+            message_type: MessageType::CommMsg,
             username: "b".into(),
             session: "c".into(),
             date: "d".into(),
@@ -109,7 +116,7 @@ mod tests {
         assert_eq!(json, "{}");
         let object_or = EmptyObjectOr::Object(Header {
             message_id: "a".into(),
-            message_type: crate::wire::MessageType::CommMsg,
+            message_type: MessageType::CommMsg,
             username: "b".into(),
             session: "c".into(),
             date: "d".into(),

@@ -2,9 +2,6 @@ use std::collections::HashMap;
 
 use serde::{Serialize, Deserialize};
 
-
-
-
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct ExecuteRequest {
     /// Source code to be executed by the kernel, one or more lines.
@@ -25,7 +22,7 @@ pub struct ExecuteRequest {
     /// A dict mapping names to expressions to be evaluated in the
     /// user's dict. The rich display-data representation of each will be evaluated after execution.
     /// See the display_data content for the structure of the representation data.
-    pub user_expressions: std::collections::HashMap<String, String>,
+    pub user_expressions: HashMap<String, String>,
 
     /// Some front-ends do not support stdin requests.
     /// If this is true, code running in the kernel can prompt the user for input
@@ -67,13 +64,13 @@ pub struct ExecuteReply {
     /// The only requirement of each payload dict is that it have a 'source' key,
     /// which is a string classifying the payload (e.g. 'page').
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub payload: Option<Vec<std::collections::HashMap<String, String>>>,
+    pub payload: Option<Vec<HashMap<String, String>>>,
 
     /// present when status is Ok
     /// 
     /// Results for the user_expressions.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub user_expressions: Option<std::collections::HashMap<String, String>>,
+    pub user_expressions: Option<HashMap<String, String>>,
 }
 
 

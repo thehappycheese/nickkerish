@@ -1,14 +1,12 @@
-#![feature(result_option_inspect)]
-
 #[macro_use]
 mod logging;
 
 mod command_line_interface;
-mod connection;
+mod connection_information;
 mod install;
 mod server;
 mod util;
-mod wire;
+mod protocol;
 
 
 use command_line_interface::CommandLineInterface;
